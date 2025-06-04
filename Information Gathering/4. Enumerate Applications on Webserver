@@ -1,1 +1,94 @@
+Test Objectives
+
+Enumerate the applications within scope that exist on a web server.
+
+-
+
+How to Test
+
+There are three factors influencing how many applications are related to a given DNS name (or an IP address):
+
+1. Different Base URL
+For example, the same symbolic name(http://www.example.com) may be associated to three web applications such as:
+http://www.example.com/url1 http://www.example.com/url2 http://www.example.com/url3
+
+Approach-
+1. directory browsing
+2. dork like site: www.example.com
+3. bruteforce with ffuf
+
+2. Non-standard Ports
+ex: http://www.example.com:20000/
+
+Approach-
+Use Nmap
+
+3. Virtual Hosts
+DNS allows a single IP address to be associated with one or more symbolic names. 
+For example, the IP address 192.168.1.100 might be associated to DNS names www.example.com , helpdesk.example.com , webmail.example.com. 
+It is not necessary that all the names belong to the same DNS domain. 
+
+This 1-to-N relationship may be reflected to serve different content by using so called virtual hosts. 
+
+The information specifying the virtual host we are referring to is embedded in the HTTP 1.1 Host header, ex:
+in http request, the Host header mentions the virtual host we are trying to access.
+
+Approach-
+There are a number of techniques which may be used to identify DNS names associated to a given IP address x.y.z.t
+
+1. DNS Zone Transfers
+This technique has limited use nowadays, given the fact that zone transfers are largely not honored by DNS servers.
+However, it may be worth a try. 
+
+First of all, testers must determine the name servers serving x.y.z.t . 
+If a symbolic name is known for x.y.z.t (let it be www.example.com ), its name servers can be determined by means of tools such
+as nslookup , host , or dig , by requesting DNS NS records.
+
+Also, For example, if the target consists of the IP address x.y.z.t and the name mail.example.com ,
+determine the name servers for domain example.com .
+
+
+The following example shows how to identify the name servers for www.owasp.org by using the host command:
+```
+$ host -t ns www.owasp.org
+www.owasp.org is an alias for owasp.org.
+owasp.org name server ns1.secure.net.
+owasp.org name server ns2.secure.net.
+```
+
+A zone transfer may now be requested to the name servers for domain example.com . 
+If the tester is lucky, they will get back a list of the DNS entries for this domain. 
+This will include the obvious www.example.com and the not-so-obvious helpdesk.example.com and webmail.example.com (and possibly others). 
+
+Trying to request a zone transfer for owasp.org from one of its name servers:
+```
+$ host -l www.owasp.org ns1.secure.net
+Using domain server:
+Name: ns1.secure.net
+Address: 192.220.124.10#53
+Aliases:
+Host www.owasp.org not found: 5(REFUSED)
+; Transfer failed.
+```
+
+2. DNS Inverse Queries
+
+This process is similar to the previous one, but relies on inverse (PTR) DNS records. Rather than requesting a zone
+transfer, try setting the record type to PTR and issue a query on the given IP address. If the testers are lucky, they may
+get back a DNS name entry. This technique relies on the existence of IP-to-symbolic name maps, which is not
+guaranteed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
