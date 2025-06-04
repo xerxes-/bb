@@ -78,17 +78,8 @@ transfer, try setting the record type to PTR and issue a query on the given IP a
 get back a DNS name entry. This technique relies on the existence of IP-to-symbolic name maps, which is not
 guaranteed.
 
+3. Vhost Fuzzing
 
+ffuf -w /usr/share/seclists/SecLists-master/Discovery/DNS/subdomains-top1million-5000.txt:FUZZ -u http://academy.htb:PORT/ -H 'Host: FUZZ.academy.htb'
 
-
-
-
-
-
-
-
-
-
-
-
-
+-
