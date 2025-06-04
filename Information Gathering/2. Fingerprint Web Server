@@ -1,1 +1,22 @@
+Test Objectives
 
+Determine the version and type of a running web server to enable further discovery of any known vulnerabilities.
+
+-
+
+1. Banner Grabbing
+
+2. Sending Malformed Requests
+ex:
+GET / SANTA CLAUS/1.1
+HTTP/1.1 400 Bad Request
+Date: Fri, 06 Sep 2019 19:21:01 GMT
+Server: Apache/2.4.41 (Unix)
+
+3. Using Automated Scanning Tools
+ex:
+Netcraft
+Nmap
+Nikto
+
+-
