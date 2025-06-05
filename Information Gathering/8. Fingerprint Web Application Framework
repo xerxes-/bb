@@ -1,1 +1,49 @@
+Test Objectives
+
+Fingerprint the components being used by the web applications.
+
+-
+
+How to Test
+
+There are several common locations to consider in order to identify frameworks or components:
+
+HTTP headers
+The most basic form of identifying a web framework is to look at the X-Powered-By field in the HTTP response header.
+ex:
+```
+$ nc 127.0.0.1 80
+HEAD / HTTP/1.0
+HTTP/1.1 200 OK
+Server: nginx/1.0.14
+[...]
+X-Powered-By: Mono
+```
+
+X-Powered-By header can be disabled and not shown sometimes or obfuscated.
+
+Cookies
+ex: Cookie: CAKEPHP=sgdsgasdgb235dfsdge;
+
+HTML source code
+
+Specific files and folders
+Use ffuf to discover files and thus, framework used.
+Specific files and folders are different for each specific application. If the identified application or component is Open
+Source there may be value in setting up a temporary installation during penetration tests in order to gain a better
+understanding of what infrastructure or functionality is presented, and what files might be left on the server. 
+
+File extensions
+Error messages
+
+-
+
+Tools:
+whatweb
+wappalyzer
+builtwith
+
+-
+
+
 
