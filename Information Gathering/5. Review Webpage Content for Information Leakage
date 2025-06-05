@@ -1,1 +1,33 @@
+Test Objectives
 
+Review webpage comments and metadata to find any information leakage.
+Gather JavaScript files and review the JS code to better understand the application and to find any information
+leakage.
+Identify if source map files or other front-end debug files exist.
+
+*A source map is a special file that connects a minified/uglified version of an asset (CSS or JavaScript) to the original authored version.
+
+-
+
+How to Test
+
+Review webpage comments and metadata- look for HTML comments which start with <!--
+
+Identifying JavaScript Code and Gathering JavaScript Files
+
+Identifying Source Map Files
+
+Source map files will usually be loaded when DevTools open. 
+Testers can also find source map files by adding the “.map” extension after the extension of each external JavaScript file. 
+For example, if a tester sees a
+/static/js/main.chunk.js file, they can then check for its source map file by visiting
+/static/js/main.chunk.js.map
+
+-
+
+Tool
+
+KeyHacks - It shows methods to validate different API keys found on a Bug Bounty Program or a pentest.
+https://github.com/streaak/keyhacks
+
+-
