@@ -1,1 +1,20 @@
+Extension checking is often used to validate files to be uploaded, which can lead to unexpected results because the
+content is not what is expected, or because of unexpected OS filename handling.
 
+-
+
+Test Objectives
+
+Dirbust sensitive file extensions, or extensions that might contain raw data (e.g. scripts, raw data, credentials, etc.).
+
+-
+
+How to Test
+
+Forced Browsing
+Submit requests with different file extensions and verify how they are handled. 
+The verification should be on a per web directory basis.
+
+If a file is found with .php, then ffuf to find more files with other ext
+
+-
