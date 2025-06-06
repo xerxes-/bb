@@ -1,0 +1,44 @@
+Rich Internet Applications (RIA) have adopted Adobe’s crossdomain.xml policy files to allow for controlled cross
+domain access to data and service consumption using technologies such as Oracle Java, Silverlight, and Adobe Flash.
+Therefore, a domain can grant remote access to its services from a different domain. However, often the policy files that
+describe the access restrictions are poorly configured. Poor configuration of the policy files enables Cross-site Request
+Forgery attacks, and may allow third parties to access sensitive data meant for the user.
+
+-
+
+Test Objectives
+
+Review and validate the policy files.
+
+-
+
+How to Test
+
+Testing for RIA Policy Files Weakness
+
+To test for RIA policy file weakness the tester should try to retrieve the policy files crossdomain.xml and
+clientaccesspolicy.xml from the application’s root, and from every folder found.
+
+For example, if the application’s URL is http://www.owasp.org , the tester should try to download the files
+http://www.owasp.org/crossdomain.xml and http://www.owasp.org/clientaccesspolicy.xml .
+
+After retrieving all the policy files, the permissions allowed should be be checked under the least privilege principle.
+Requests should only come from the domains, ports, or protocols that are necessary. Overly permissive policies should
+be avoided. Policies with * in them should be closely examined.
+
+An example of an overly permissive policy file:
+
+<?xml version="1.0"?>
+<!DOCTYPE cross-domain-policy SYSTEM
+"http://www.adobe.com/xml/dtds/cross-domain-policy.dtd">
+<cross-domain-policy>
+<site-control permitted-cross-domain-policies="all"/>
+<allow-access-from domain="*" secure="false"/>
+<allow-http-request-headers-from domain="*" headers="*" secure="false"/>
+</cross-domain-policy>
+
+Result Expected
+A list of policy files found.
+A list of weak settings in the policies.
+
+-
