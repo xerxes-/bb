@@ -1,1 +1,66 @@
+Test Objectives
 
+Find and analyse unreferenced files that might contain sensitive information.
+
+-
+
+How to Test
+
+1. Inference from the Naming Scheme Used for Published Content
+
+For example, if a page viewuser.asp is found, then
+look also for edituser.asp , adduser.asp and deleteuser.asp . If a directory /app/user is found, then look also for
+/app/admin and /app/manager .
+
+2. Other Clues in Published Content
+
+Many web applications leave clues in published content that can lead to the discovery of hidden pages and
+functionality. These clues often appear in the source code of HTML and JavaScript files. The source code for all
+published content should be manually reviewed to identify clues about other pages and functionality.
+
+3. Blind Guessing
+
+Use ffuf
+
+More advanced/effective guessing attacks can be performed as follows:
+Identify the file extensions in use within known areas of the application (e.g. jsp, aspx, html), and use a basic
+wordlist appended with each of these extensions (or use a longer list of common extensions if resources permit).
+
+For each file identified through other enumeration techniques, create a custom wordlist derived from that filename.
+Get a list of common file extensions (including ~, bak, txt, src, dev, old, inc, orig, copy, tmp, swp, etc.) and use each
+extension before, after, and instead of, the extension of the actual filename.
+
+4. Information Obtained Through Server Vulnerabilities and Misconfiguration
+
+The most obvious way in which a misconfigured server may disclose unreferenced pages is through directory listing.
+Request all enumerated directories to identify any which provide a directory listing.
+
+5. Use of Publicly Available Information
+
+like wayback machine
+
+In addition, Google and Yahoo keep cached versions of pages found by their robots. Even if 1998results.asp has
+been removed from the target server, a version of its output may still be stored by these search engines. The
+cached version may contain references to, or clues about, additional hidden content that still remains on the server.
+
+Content that is not referenced from within a target application may be linked to by third-party websites. For
+example, an application which processes online payments on behalf of third-party traders may contain a variety of
+bespoke functionality which can (normally) only be found by following links within the web sites of its customers.
+
+6. Filename Filter Bypass
+
+Because deny list filters are based on regular expressions, one can sometimes take advantage of obscure OS filename
+expansion features, which work in ways the developer didn’t expect. The tester can sometimes exploit differences in
+ways that filenames are parsed by the application, web server, and underlying OS and it’s filename conventions.
+
+Example: Windows 8.3 filename expansion c:\\program files becomes C:\\PROGRA\~1
+
+Remove incompatible characters
+Convert spaces to underscores
+Take the first six characters of the basename
+Add ~<digit> which is used to distinguish files with names using the same six initial characters
+This convention changes after the first 3 cname ollisions
+Truncate file extension to three characters
+Make all the characters uppercase
+
+-
