@@ -1,1 +1,38 @@
+Applications have several types of functionalities and services, and those require access permissions based on the needs of the user.
+Based on Role-based access control (RBAC), the user is capable of accomplishing the required task.
 
+-
+
+Test Objectives
+
+Identify and document roles used by the application.
+Attempt to switch, change, or access another role.
+Review the granularity of the roles and the needs behind the permissions given.
+
+-
+
+How to Test
+
+1. Roles Identification
+
+The tester should start by identifying the application roles being tested through any of the following methods:
+1. Application documentation.
+2. Guidance by the developers or administrators of the application.
+3. Application comments.
+4. Fuzz possible roles:
+  cookie variable (e.g. role=admin , isAdmin=True )
+  account variable (e.g. Role: manager )
+  hidden directories or files (e.g. /admin , /mod , /backups )
+  switching to well known users (e.g. admin , backups , etc.)
+
+2. Switching to Available Roles
+
+After identifying possible attack vectors, the tester needs to test and validate that they can access the available roles.
+
+3. Review Roles Permissions
+
+After gaining access to the roles on the system, the tester must understand the permissions provided to each role.
+A support engineer shouldn’t be able to conduct administrative functionalities, manage the backups, or conduct any
+transactions in the place of a user.
+
+-
