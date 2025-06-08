@@ -1,0 +1,77 @@
+Vulns:
+
+1. Unprotected Functionality
+
+Can access admin panel by going to 
+http://example.com/admin
+
+or find it in robots.txt
+or use ffuf to find it
+or find it in the js file
+
+2. Parameter-based access control methods
+
+Some applications determine the user's access rights or role at login, and then store this information in a user-controllable location. This could be:
+
+    A hidden field.
+    A cookie.
+    A preset query string parameter.
+
+ex-
+https://insecure-website.com/login/home.jsp?admin=true
+https://insecure-website.com/login/home.jsp?role=1
+
+3.  Use non-standard HTTP headers to override the URL in the original request, such as X-Original-URL and X-Rewrite-URL
+
+ex-
+POST / HTTP/1.1
+X-Original-URL: /admin/deleteUser
+...
+
+4. Try other methods like Get, Head, Post to access restricted URL
+
+5. URL-matching discrepancies
+
+a request to /ADMIN/DELETEUSER may be mapped to the /admin/deleteUser 
+
+or
+
+/admin/deleteUser = /admin/deleteUser/
+
+6. IDOR
+
+Application uses user-supplied input to access objects directly.
+
+ex-
+https://insecure-website.com/customer_account?customer_number=132355
+https://insecure-website.com/static/12144.txt
+
+7. Multi-step processes
+
+ For example, the administrative function to update user details might involve the following steps:
+
+    1. Load the form that contains details for a specific user.
+    2. Submit the changes.
+    3. Review the changes and confirm.
+
+Imagine a website where access controls are correctly applied to the first and second steps, but not to the third step. 
+The website assumes that a user will only reach step 3 if they have already completed the first steps, which are properly controlled. 
+An attacker can gain unauthorized access to the function by skipping the first two steps and directly submitting the request for the third step with the required parameters. 
+
+8. Referer-based access control
+
+Some websites base access controls on the Referer header submitted in the HTTP request. 
+The Referer header can be added to requests by browsers to indicate which page initiated a request.
+
+For example, an application robustly enforces access control over the main administrative page at /admin, 
+but for sub-pages such as /admin/deleteUser only inspects the Referer header. 
+If the Referer header contains the main /admin URL, then the request is allowed. 
+
+In this case, the Referer header can be fully controlled by an attacker. 
+This means that they can forge direct requests to sensitive sub-pages by supplying the required Referer header, and gain unauthorized access. 
+
+9. Location-based access control
+
+These access controls can often be circumvented by the use of web proxies, or VPNs.
+
+-
