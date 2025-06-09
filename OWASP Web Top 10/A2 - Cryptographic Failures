@@ -1,0 +1,55 @@
+Exploits:
+
+1. Weak/Outdated Cryptographic Algorithms
+
+Exploitation: An attacker gains access to a password database where passwords are stored using unsalted MD5 or SHA-1 hashes. 
+They can then use readily available rainbow tables or GPU-accelerated cracking tools to quickly reverse many of these hashes back to their original plaintext passwords, 
+especially common ones.
+
+2. Improper Key Management
+
+Exploitation: An attacker exploits a directory traversal or local file inclusion (LFI) vulnerability on the web server to read a file containing plaintext encryption keys. 
+Alternatively, if the server is compromised (e.g., through an RCE), the attacker can simply read the key file.
+
+3. Missing or Insufficient Encryption
+
+Exploitation: A user logs into a website that uses HTTP. 
+An attacker on the same Wi-Fi network (e.g., public Wi-Fi) uses a tool like Wireshark to capture the network traffic. 
+Since the traffic is unencrypted, the attacker can see the username and password being transmitted in plaintext.
+
+4. Flawed Random Number Generation
+
+Exploitation: A web application generates password reset tokens on the client-side using a weak Math.random() function or a predictable timestamp.
+An attacker can analyze the patterns or simply try a small range of possible tokens to guess a valid one.
+
+-
+
+Aspect	                             Encryption	                                                                 Hashing
+
+Definition	   A reversible process that transforms data into an unreadable form using a key.	   An irreversible process that converts data into a fixed-length string (hash).
+
+Purpose	       Protect confidentiality of data (e.g., secure communication or storage).	         Verify data integrity or store passwords securely.
+
+Reversibility	    Reversible with the correct key.	                                             Irreversible (one-way function).
+
+Output	          Ciphertext (variable length, depends on input).	                               Fixed-length hash (e.g., 256 bits for SHA-256).
+
+Key Usage	        Requires a key (symmetric or asymmetric).	                                     No key required (though salts may be used for passwords).
+
+Examples	        AES-256, RSA, TLS.	                                                           SHA-256, bcrypt, MD5 (deprecated).
+
+Use Case	        Securing data in transit (e.g., HTTPS) or at rest (e.g., encrypted files).	   Password storage, file integrity checks, digital signatures.
+
+Security Goal	    Confidentiality.	                                                             Integrity and authentication.
+
+Exploitation Risk	  Weak keys, improper algorithm, or key exposure can lead to decryption.	       Weak hashing (e.g., MD5) vulnerable to collisions or precomputation attacks.
+
+Performance	        Slower due to key management and reversible operations.	                     Faster, as it’s a one-way process.
+
+
+Interview Tip
+
+Be ready to explain when to use each (e.g., encryption for sensitive data transmission, hashing for password storage) and why combining them 
+(e.g., hashing passwords with salts, encrypting hashed data) enhances security.
+
+-
