@@ -1,0 +1,212 @@
+SQLi
+====
+
+Detect:
+
+Test against every entry point in the application. Like submit-
+
+1. single quote character ' and look for errors or other anomalies. 
+2. Boolean conditions such as OR 1=1 and OR 1=2, and look for differences in the application's responses. 
+
+In SQL query, test in WHERE and ORDER BY clause.
+
+-
+
+Exploits:
+
+1. Retrieving hidden data
+
+ex: https://insecure-website.com/products?category=Gifts'--
+
+2. Subverting application logic
+
+On login page, type username as administrator'-- and leave pass blank.
+
+3. Retrieving data from other database tables using UNION
+
+https://insecure-website.com/products?category=Gifts' UNION SELECT username, password FROM users--
+
+For proper transmission, it should be URL-encoded as:
+https://insecure-website.com/products?category=Gifts%27%20UNION%20SELECT%20username,%20password%20FROM%20users--
+
+
+3.1 For a UNION query to work, two key requirements must be met:
+
+a. The individual queries must return the same number of columns.
+b. For a UNION query to work, the second requirement is that the data types in each corresponding column of the individual queries must be able to work together. 
+This means the database should be able to compare or convert the data types without errors, even if they aren't exactly the same 
+(e.g., INT and FLOAT are compatible because the database can handle conversions between them).
+
+To check these two requirements are met, find out:
+
+1. How many columns are being returned from the original query.
+2. Which columns returned from the original query are of a suitable data type to hold the results from our injected query.
+
+1.1 Two effective methods to determine how many columns are being returned from the original query-
+
+First method involves injecting a series of ORDER BY clauses and incrementing the specified column index until an error occurs. 
+
+ex:
+' ORDER BY 1--
+' ORDER BY 2--
+' ORDER BY 3--
+etc.
+
+The column in an ORDER BY clause can be specified by its index, so you don't need to know the names of any columns. 
+
+When the specified column index exceeds the number of actual columns in the result set, the database returns an error.
+The application might actually return the database error in its HTTP response, but it may also issue a generic error response. 
+In other cases, it may simply return no results at all. 
+
+1.2 Second method involves submitting a series of UNION SELECT payloads specifying a different number of null values.
+
+ex:
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+etc.
+
+If the number of nulls does not match the number of columns, the database returns an error.
+When the number of nulls matches the number of columns, the database returns an additional row in the result set, containing null values in each column. 
+Or it could also show this error: NullPointerException.
+
+We use NULL as it is convertible to every common data type, so it maximizes the chance that the payload will succeed when the column count is correct. 
+
+Both methods won't work, if there is no response.
+
+
+3.2 Finding columns with a useful data type
+
+After you determine the number of required columns, you can probe each column to test whether it can hold string data. 
+You can submit a series of UNION SELECT payloads that place a string value into each column in turn. 
+For example, if the query returns four columns, you would submit: 
+
+' UNION SELECT 'a',NULL,NULL,NULL--
+' UNION SELECT NULL,'a',NULL,NULL--
+' UNION SELECT NULL,NULL,'a',NULL--
+' UNION SELECT NULL,NULL,NULL,'a'--
+
+If the column data type is not compatible with string data, the injected query will cause a database error.
+If an error does not occur, and the application's response contains some additional content including the injected string value, 
+then the relevant column is suitable for retrieving string data. 
+
+
+a. Querying the database type and version:
+
+Database type 	Query
+Microsoft, MySQL 	SELECT @@version
+Oracle 	SELECT * FROM v$version
+PostgreSQL 	SELECT version() 
+
+ex: ' UNION SELECT @@version--
+
+[URL encode the injected query when testing]
+
+b. Listing the contents of the database
+
+Non-Oracle:
+
+SELECT * FROM information_schema.tables
+SELECT * FROM information_schema.columns WHERE table_name = 'Users'
+
+Oracle:
+
+SELECT * FROM all_tables
+SELECT * FROM all_tab_columns WHERE table_name = 'USERS'
+
+
+4. Retrieving multiple values within a single column
+
+In some cases the original query may only return a single column.
+You can retrieve multiple values together within this single column by concatenating the values together.
+For example, on Oracle you could submit the input:
+
+' UNION SELECT username || '~' || password FROM users--
+
+This uses the double-pipe sequence || which is a string concatenation operator on Oracle. 
+The injected query concatenates together the values of the username and password fields, separated by the ~ character. 
+
+
+5. Second-order SQL injection
+
+First-order SQL injection occurs when the application processes user input from an HTTP request and incorporates the input into a SQL query in an unsafe way.
+
+Second-order SQL injection occurs when the application takes user input from an HTTP request and stores it into a database, but no vulnerability occurs at the 
+point where the data is stored. 
+Later, when handling a different HTTP request, the application retrieves the stored data and incorporates it into a SQL query in an unsafe way. 
+For this reason, second-order SQL injection is also known as stored SQL injection. 
+
+
+6. Blind SQLi 
+
+It is when an attacker sends SQL queries to a database and infers information from the application's response behavior because they cannot see the actual query output.
+
+UNION attacks are not effective with blind SQLi vulnerabilities as they rely on being able to see the results of the injected query within the application's responses.
+
+6.1 Exploiting blind SQLi by triggering conditional responses
+
+ex:
+
+Requests to the application include a cookie header like this:
+
+Cookie: TrackingId=u5YD3PapBcR4lN3e7Tj4
+
+When a request containing a TrackingId cookie is processed, the application uses a SQL query to determine whether this is a known user:
+
+SELECT TrackingId FROM TrackedUsers WHERE TrackingId = 'u5YD3PapBcR4lN3e7Tj4'
+
+
+This query is vulnerable to SQL injection, but the results from the query are not returned to the user. 
+However, the application does behave differently depending on whether the query returns any data. 
+If you submit a recognized TrackingId, the query returns data and you receive a "Welcome back" message in the response.
+
+This behavior is enough to be able to exploit the blind SQL injection vulnerability. 
+
+We can exploit the vuln by adding conditional statement like this to check for password 1 letter at a time, provided if we know already know the 
+table and column names and user as 'admin':
+
+First send:
+xyz' AND SUBSTRING((SELECT Password FROM Users WHERE Username = 'admin'), 1, 1) > 'm
+
+This returns the "Welcome back" message, indicating that the injected condition is true, and so the first character of the password is greater than m. 
+
+{
+First 1: The starting position in the string (1-based indexing, meaning the first character of the password).
+Second 1: The length of the substring to extract (1 character in this case).
+}
+
+Then send:
+xyz' AND SUBSTRING((SELECT Password FROM Users WHERE Username = 'admin'), 1, 1) > 't
+
+This does not return the "Welcome back" message, indicating that the injected condition is false, and so the first character of the password is not greater than t. 
+
+this is how we will find the password for admin.
+
+
+6.2 Error-based SQL injection
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
