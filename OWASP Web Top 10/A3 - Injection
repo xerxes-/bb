@@ -185,14 +185,49 @@ this is how we will find the password for admin.
 
 6.2 Error-based SQL injection
 
+6.2.1 Exploiting blind SQLi by triggering conditional errors
+
+In the prev example, we could get atleast "Welcome back" msg that helped us to inject our query and find out if our conditon was true.
+In this case, there is no reflection of either true or false output.
+
+Therefore, we will induce error in the app so that we know when our injected query is true or false and retrieve sensitive data.
+
+To see how this works, suppose that two requests are sent containing the following TrackingId cookie values in turn:
+
+xyz' AND (SELECT CASE WHEN (1=2) THEN 1/0 ELSE 'a' END)='a
+xyz' AND (SELECT CASE WHEN (1=1) THEN 1/0 ELSE 'a' END)='a
+
+With the first input, the CASE expression evaluates to 'a', which does not cause any error.
+With the second input, it evaluates to 1/0, which causes a divide-by-zero error.
+
+If the error causes a difference in the application's HTTP response, you can use this to determine whether the injected condition is true.
+Using this technique, you can retrieve data by testing one character at a time:
+
+xyz' AND (SELECT CASE WHEN (Username = 'Administrator' AND SUBSTRING(Password, 1, 1) > 'm') THEN 1/0 ELSE 'a' END FROM Users)='a
 
 
+6.2.2 Extracting sensitive data via verbose SQL error messages
+
+In this case, the verbose error msg due to db misconfig may show the SQL query being used and occasionally, show the data itself.
+This effectively turns otherwise blind SQLi vulnerabilities into visible ones.
+
+a. Can induce error by injecting a single quote into a parameter
+
+b. You can use the CAST() function to achieve this. It enables you to convert one data type to another. 
+
+For example, imagine a query containing the following statement:
+
+CAST((SELECT example_column FROM example_table) AS int)
+
+Often, the data that you're trying to read is a string. 
+Attempting to convert this to an incompatible data type, such as an int, may cause an error similar to the following:
+
+ERROR: invalid input syntax for type integer: "Example data"
+
+This type of query may also be useful if a character limit prevents you from triggering conditional responses.
 
 
-
-
-
-
+6.3 Exploiting blind SQLi by triggering time delays
 
 
 
