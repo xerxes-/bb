@@ -37,7 +37,17 @@ Check console output in the browser's Developer Tools by going to the Console ta
 
 -
 
+Types of XSS attacks:
 
+1. Stored (Persistent) XSS: The malicious script is permanently saved on the target server (e.g., in a database, comment section, forum post), 
+affecting users who access the compromised page.
+
+2. Reflected (Non-Persistent) XSS: The malicious script is reflected off the web server in an error message or search result, 
+requiring the attacker to trick the victim into clicking a specially crafted link. 
+Web server doesn't check the mal input and embeds in the HTTP response that causes the vuln.
+
+3. DOM-based XSS: The vulnerability lies in the client-side code (JavaScript) that processes data, 
+modifying the Document Object Model (DOM) environment in the victim's browser rather than the server response itself.
 
 
 
