@@ -42,14 +42,79 @@ Types of XSS attacks:
 1. Stored (Persistent) XSS: The malicious script is permanently saved on the target server (e.g., in a database, comment section, forum post), 
 affecting users who access the compromised page.
 
+ex: *
+
+
+1.1 Kind of Reflected XSS payload to be used is based on:
+
+1. The location of the reflected data within the application's response.
+2. If the application performs any validation or other processing on the submitted data before it is reflected.
+
+
+1.2 How to find and test for stored XSS vulnerabilities
+
+A more realistic approach is to work systematically through the data entry points, 
+submitting a specific value into each one, and monitoring the application's responses to detect cases where the submitted value appears.
+When the submitted value is observed in a response, you need to determine whether the data is indeed being stored 
+across different requests, as opposed to being simply reflected in the immediate response.
+
+This involves determining the context within the response where the stored data appears and testing suitable candidate XSS payloads 
+that are applicable to that context. 
+At this point, the testing methodology is broadly the same as for finding reflected XSS vulnerabilities.
+
+
 2. Reflected (Non-Persistent) XSS: The malicious script is reflected off the web server in an error message or search result, 
 requiring the attacker to trick the victim into clicking a specially crafted link. 
 Web server doesn't check the mal input and embeds in the HTTP response that causes the vuln.
+
+ex: *
+
+
+2.1 Kind of Reflected XSS payload to be used is based on:
+
+1. The location of the reflected data within the application's response.
+2. If the application performs any validation or other processing on the submitted data before it is reflected.
+
+
+2.2 How to find and test for reflected XSS vulnerabilities
+
+2.2.1 Test every entry point:
+This includes- parameters or other data within the URL query string and message body, and the URL file path and HTTP headers.
+
+2.2.2 Submit random alphanumeric values:
+For each entry point, submit a unique random alphanumeric value of around 8 characters and determine whether the value is reflected in the response.
+Use Burp Intruder's number payloads with randomly generated hex values to generate suitable random values. 
+And you can use Burp Intruder's grep payloads settings to automatically flag responses that contain the submitted value.
+
+2.2.3 Determine the reflection context: 
+For each location within the response where the random value is reflected, determine its context. 
+This might be in text between HTML tags, within a tag attribute which might be quoted, within a JavaScript string, etc.
+
+2.2.4 Test a candidate payload: 
+Based on the context of the reflection, test an initial candidate XSS payload that will trigger JavaScript execution if it is 
+reflected unmodified within the response. 
+The easiest way to test payloads is to send the request to Burp Repeater, modify the request to insert the candidate payload, 
+issue the request, and then review the response to see if the payload worked. 
+An efficient way to work is to leave the original random value in the request and place the candidate XSS payload before or after it. 
+Then set the random value as the search term in Burp Repeater's response view. 
+Burp will highlight each location where the search term appears, letting you quickly locate the reflection.
+
+2.2.5 Test alternative payloads: 
+If the candidate XSS payload was modified by the application, or blocked altogether, 
+then you will need to test alternative payloads and techniques that might deliver a working XSS attack based on the context 
+of the reflection and the type of input validation that is being performed.
+
+2.2.6 Test the attack in a browser: 
+Finally, if you succeed in finding a payload that appears to work within Burp Repeater, transfer the attack to a real browser 
+and see if the injected JavaScript is indeed executed.
+
 
 3. DOM-based XSS: The vulnerability lies in the client-side code (JavaScript) that processes data, 
 modifying the Document Object Model (DOM) environment in the victim's browser rather than the server response itself.
 
 
+
+-
 
 
 
