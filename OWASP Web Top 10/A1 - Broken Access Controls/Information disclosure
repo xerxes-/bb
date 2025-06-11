@@ -116,12 +116,13 @@ such as the name of internal authentication headers that may be appended to requ
 
 Virtually all websites are developed using some form of version control system, such as Git. 
 By default, a Git project stores all of its version control data in a folder called .git. 
-Occasionally, websites expose this directory in the production environment. In this case, you might be able to access it by simply browsing to /.git.
+Occasionally, websites expose this directory in the production environment. 
 
+Simply browse to /.git
 
+Use tool like GitHack to browse the raw file structure and contents.
 
+This might not give you access to the full source code, but comparing the diff will allow you to read small snippets of code. 
+As with any source code, you might also find sensitive data hard-coded within some of the changed lines.
 
-
-
-
-
+-
