@@ -1,1 +1,145 @@
+They are flaws in the design and implementation of an application that allow an attacker to elicit unintended behavior.
 
+-
+
+For example, an attacker might be able to complete a transaction without going through the intended purchase workflow. 
+In other cases, broken or non-existent validation of user-supplied data might allow users to make arbitrary changes to 
+transaction-critical values or submit nonsensical input. 
+By passing unexpected values into server-side logic, an attacker can potentially induce the application to do something that it isn't supposed to.
+
+Logic-based vulnerabilities can be extremely diverse and are often unique to the application and its specific functionality. 
+Identifying them often requires an understanding of the business domain or what goals an attacker might have in a given context. 
+This makes them difficult to detect using automated vulnerability scanners. 
+As a result, logic flaws are a great target for bug bounty hunters and manual testers in general.
+
+-
+
+For example, if the developers assume that users will pass data exclusively via a web browser, 
+the application may rely entirely on weak client-side controls to validate input. 
+These are easily bypassed by an attacker using an intercepting proxy.
+
+-
+
+Examples of business logic vulnerabilities
+
+1. Excessive trust in client-side controls
+
+A fundamentally flawed assumption is that users will only interact with the application via the provided web interface. 
+This is especially dangerous because it leads to the further assumption that client-side validation will prevent users from 
+supplying malicious input. 
+However, an attacker can simply use tools such as Burp Proxy to tamper with the data after it has been sent by the browser but 
+before it is passed into the server-side logic. This effectively renders the client-side controls useless.
+
+Accepting data at face value, without performing proper integrity checks and server-side validation, 
+can allow an attacker to do all kinds of damage with relatively minimal effort.
+
+2. Failing to handle unconventional input
+
+One aim of the application logic is to restrict user input to values that adhere to the business rules.
+
+ex:
+When ordering products, users typically specify the quantity that they want to order. 
+Although any integer is theoretically a valid input, the business logic might prevent users from ordering more units than are currently in stock.
+
+To implement rules like this, developers need to tell the application whether it should allow a given input and 
+how it should react based on various conditions.
+
+ex:
+Consider a funds transfer between two bank accounts. 
+This functionality will almost certainly check whether the sender has sufficient funds before completing the transfer:
+
+$transferAmount = $_POST['amount'];
+$currentBalance = $user->getBalance();
+
+if ($transferAmount <= $currentBalance) {
+    // Complete the transfer
+} else {
+    // Block the transfer: insufficient funds
+}
+
+If the attacker sent -$1000 to the victim's account, this might result in them receiving $1000 from the victim instead. 
+The logic would always evaluate that -1000 is less than the current balance and approve the transfer.
+The system might then process the transfer as moving $1000 from the victim's account to the attacker's account, reversing the intended direction.
+
+When auditing an application, you should use tools such as Burp Proxy and Repeater to try submitting unconventional values. 
+In particular, try input in ranges that legitimate users are unlikely to ever enter. 
+This includes exceptionally high or exceptionally low numeric inputs and abnormally long strings for text-based fields. 
+You can even try unexpected data types. 
+By observing the application's response, you should try and answer the following questions:
+
+a. Are there any limits that are imposed on the data?
+b. What happens when you reach those limits?
+c. Is any transformation or normalization being performed on your input?
+
+This may expose weak input validation that allows you to manipulate the application in unusual ways. 
+Keep in mind that if you find one form on the target website that fails to safely handle unconventional input, 
+it's likely that other forms will have the same issues.
+
+3. Making flawed assumptions about user behavior
+
+3.1 Inconsistent security controls
+
+ex: flawed logic allows arbitrary users to access admin functionality that should only be available to company employees.
+
+3.2 Users won't always supply mandatory input
+
+One misconception is that users will always supply values for mandatory input fields. 
+Browsers may prevent ordinary users from submitting a form without a required input, but as we know, 
+attackers can tamper with parameters in transit. 
+This even extends to removing parameters entirely.
+
+When probing for logic flaws, you should try removing each parameter in turn and observing what effect this has on the response. 
+You should make sure to:
+
+a. Only remove one parameter at a time to ensure all relevant code paths are reached.
+b. Try deleting the name of the parameter as well as the value. The server will typically handle both cases differently.
+c. Follow multi-stage processes through to completion. Sometimes tampering with a parameter in one step will have an 
+effect on another step further along in the workflow.
+
+This applies to both URL and POST parameters, but don't forget to check the cookies too. 
+This simple process can reveal some bizarre application behavior that may be exploitable.
+
+3.3 Users won't always follow the intended sequence
+
+Many transactions rely on predefined workflows consisting of a sequence of steps. 
+The web interface will typically guide users through this process, 
+taking them to the next step of the workflow each time they complete the current one. 
+However, attackers won't necessarily adhere to this intended sequence.
+
+For example, many websites that implement two-factor authentication (2FA) require users to log in on one page before 
+entering a verification code on a separate page. 
+Assuming that users will always follow this process through to completion and, as a result, 
+not verifying that they do, app may allow attackers to bypass the 2FA step entirely.
+
+Also, pay close attention to any error messages or debug information that you encounter.
+
+3.4 Domain-specific flaws
+
+In many cases, you will encounter logic flaws that are specific to the business domain or the purpose of the site.
+
+For example, consider an online shop that offers a 10% discount on orders over $1000. 
+This could be vulnerable to abuse if the business logic fails to check whether the order was changed after the discount is applied. 
+In this case, an attacker could simply add items to their cart until they hit the $1000 threshold, 
+then remove the items they don't want before placing the order. 
+They would then receive the discount on their order even though it no longer satisfies the intended criteria.
+
+*whether you're bug bounty hunting, pentesting, or even just a developer trying to write more secure code, 
+you may at some point encounter applications from less familiar domains. 
+In this case, you should read as much documentation as possible and, where available, 
+talk to subject-matter experts from the domain to get their insight. 
+This may sound like a lot of work, but the more obscure the domain is, the more likely other testers will have missed plenty of bugs.
+
+3.5 Providing an encryption oracle
+
+solve the lab
+
+3.6 Email address parser discrepancies
+
+Some websites parse email addresses to extract the domain and determine which organization the email owner belongs to. 
+While this process may initially seem straightforward, it is actually very complex, even for valid RFC-compliant addresses.
+
+The main impact of email address parser discrepancies is unauthorized access. 
+Attackers can register accounts using seemingly valid email addresses from restricted domains. 
+This enables them to gain access to sensitive areas of the application, such as admin panels or restricted user functions.
+
+-
