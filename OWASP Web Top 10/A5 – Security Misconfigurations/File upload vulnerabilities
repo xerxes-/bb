@@ -1,10 +1,32 @@
-They happen when a web server allows users to upload files to its filesystem without sufficiently validating things like their 
-name, type, contents, or size. 
-Failing to properly enforce restrictions on these could mean that even a basic image upload function can be used to 
-upload arbitrary and potentially dangerous files instead. This could even include server-side script files that enable remote code execution.
-
-In some cases, the act of uploading the file is in itself enough to cause damage. 
-Other attacks may involve a follow-up HTTP request for the file, typically to trigger its execution by the server.
+They happen when a web server allows users to upload files to its filesystem without sufficiently validating things like file name, type, contents, or size.
 
 -
 
+How do web servers handle requests for static files?
+
+At some point, the server parses the path in the request to identify the file extension. 
+It then uses this to determine the type of the file being requested, typically by comparing it to a list of preconfigured mappings 
+between extensions and MIME types. What happens next depends on the file type and the server's configuration:
+
+1. If this file type is non-executable, such as an image or a static HTML page, 
+the server may just send the file's contents to the client in an HTTP response.
+
+2. If the file type is executable, such as a PHP file, and the server is configured to execute files of this type, 
+it will assign variables based on the headers and parameters in the HTTP request before running the script. 
+The resulting output may then be sent to the client in an HTTP response.
+
+3. If the file type is executable, but the server is not configured to execute files of this type, it will generally respond with an error. 
+However, in some cases, the contents of the file may still be served to the client as plain text. 
+Such misconfigurations can occasionally be exploited to leak source code and other sensitive information. 
+
+-
+
+Tip: 
+The Content-Type response header may provide clues as to what kind of file the server thinks it has served. 
+If this header hasn't been explicitly set by the application code, it normally contains the result of the file extension/MIME type mapping.
+
+-
+
+Exploitation
+
+1. Exploiting unrestricted file uploads to deploy a web shell
