@@ -18,6 +18,8 @@ Exploits:
 
 ex: https://insecure-website.com/products?category=Gifts'--
 
+backend SQL: SELECT * FROM products WHERE category = 'Gifts' AND released = 1
+
 2. Subverting application logic
 
 On login page, type username as administrator'-- and leave pass blank.
