@@ -1,1 +1,145 @@
+It happens when two or more HTTP requests are processed at the same time, 
+and the app doesn’t handle them properly, leading to unexpected or insecure results.
+
+-
+
+A race condition can happen whether the requests are:
+
+1. Same requests (most common in attacks):
+
+Identical requests sent very quickly or at the same time.
+
+Example:
+
+    A user sends two identical "Redeem Gift Card" requests at the same time.
+
+    The web app isn’t designed to stop double redemption.
+
+    Both succeed — gift card used twice.
+
+
+2. Different requests that touch the same resource:
+
+Example:
+
+    Request A: POST /buy-ticket
+
+    Request B: POST /apply-coupon
+
+If both happen at the same time, and there's no locking or proper check, it might apply the coupon after purchase was completed — leading to incorrect behavior.
+
+
+*Race conditions don’t care what the requests are — only that they compete for the same resource and the app doesn’t control the timing properly.
+
+The period of time during which a collision is possible is known as the "race window". 
+This could be the fraction of a second between two interactions with the database, for example. 
+
+-
+
+Q: Apply coupon + buy item at the same time
+in this case what is the same resource?
+
+In the case of "Apply coupon + Buy item at the same time", the same resource is typically the order/cart/checkout state in the database.
+
+
+📦 Let’s break it down:
+
+You have:
+
+A **cart** in the database:
+
+  ```json
+  {
+    "user_id": 101,
+    "items": ["Laptop"],
+    "total": 50,000,
+    "coupon_applied": false
+  }
+  ```
+
+🧠 The race:
+
+1. **Request A** → `POST /apply-coupon`
+
+   * Applies `DISCOUNT10`
+   * Updates `cart.total = 45,000`
+   * Sets `coupon_applied = true`
+
+2. **Request B** → `POST /checkout`
+
+   * Proceeds with payment
+   * Charges `50,000` (if it read the cart before the coupon applied)
+   * Marks order as completed
+
+If both happen at the **same time**, and the backend isn't careful, the **final price** charged may be:
+
+* Without the coupon
+* Or with extra discount
+* Or the coupon gets used after the order is already placed
+
+
+🛑 So the shared resource is:
+
+* The cart object (or session/order) in the backend — that both requests are reading/updating at the same time.
+
+This is what causes the **inconsistency** — because both requests assume they’re the only one touching it.
+
+
+💡 Real-world risks:
+
+* Coupon reuse
+* Incorrect pricing
+* Free items
+* Double orders
+* Payment bypass
+
+--
+
+Burp automatically adjusts the technique it uses to suit the HTTP version supported by the server:
+
+    For HTTP/1, it uses the classic last-byte synchronization technique.
+    For HTTP/2, it uses the single-packet attack technique
+
+--
+
+Vulns:
+
+1. Limit overrun race conditions
+
+The most well-known type of race condition enables you to exceed some kind of limit imposed by the business logic of the application. 
+
+ex:
+    Redeeming a gift card multiple times
+    Rating a product multiple times
+    Withdrawing or transferring cash in excess of your account balance
+    Reusing a single CAPTCHA solution
+    Bypassing an anti-brute-force rate limit
+
+Limit overruns are a subtype of so-called "time-of-check to time-of-use" (TOCTOU) flaws.
+
+
+Detecting and exploiting:
+    1. Identify a single-use or rate-limited endpoint that has some kind of security impact or other useful purpose. ex: applying coupon coe
+    2. Issue multiple requests to this endpoint in quick succession to see if you can overrun this limit. ex: using burp repeater
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
