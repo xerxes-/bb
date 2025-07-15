@@ -199,6 +199,12 @@ If cached by a browser, it's safer — because only that user can see it.
 
 -
 
+❓If a response has Cache-Control: no-store, does it still go through the CDN?
+
+✅ Yes, it goes through the CDN — but it won’t be cached.
+
+-
+
 
 
 
