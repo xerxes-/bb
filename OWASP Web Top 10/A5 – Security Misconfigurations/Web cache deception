@@ -184,5 +184,21 @@ If cached by a browser, it's safer — because only that user can see it.
 
 -
 
+💡 Cache Flow Summary:
+
+    User requests URL → CDN checks for cached copy.
+
+    Cache hit → Serve from CDN (fast).
+
+    Cache miss → Go to origin → Serve to user → Maybe cache it (if rules allow).
+
+
+🔐 Why this matters in security:
+
+    On a cache miss, if the CDN caches a page that contains user-specific data, and later serves that to others (on a cache hit) → Web Cache Deception or Leakage.
+
+-
+
+
 
 
