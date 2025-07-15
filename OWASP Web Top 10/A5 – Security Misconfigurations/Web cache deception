@@ -90,7 +90,16 @@ Cache-Control: public
 
 -
 
+Cache keys
 
+When the cache receives an HTTP request, it must decide whether there is a cached response that it can serve directly, or whether 
+it has to forward the request to the origin server. 
+The cache makes this decision by generating a 'cache key' from elements of the HTTP request. 
+Typically, this includes the URL path and query parameters, but it can also include a variety of other elements like headers and content type.
+
+If the incoming request's cache key matches that of a previous request, the cache considers them to be equivalent and serves a copy of the cached response. 
+
+-
 
 
 
