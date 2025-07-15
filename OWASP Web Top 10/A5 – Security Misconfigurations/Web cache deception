@@ -23,3 +23,79 @@ https://example.com/account/random.jpg
 
 -
 
+Web caches
+
+A web cache is a system (CDN or proxy server) that sits between the origin server and the user. 
+When a client requests a static resource, the request is first directed to the cache. 
+If the cache doesn't contain a copy of the resource (known as a cache miss), the request is forwarded to the origin server, which processes and responds to the request. 
+The response is then sent to the cache before being sent to the user. 
+The cache uses a preconfigured set of rules to determine whether to store the response.
+
+When a request for the same static resource is made in the future, the cache serves the stored copy of the response directly to the user (known as a cache hit). 
+
+-
+
+Cache Rules
+
+They tell browsers or proxy servers (like CDNs) what content to store, how long to store it, and who can use it.
+
+They are controlled using HTTP headers, mainly:
+
+    Cache-Control
+
+    Expires
+
+    ETag
+
+    Last-Modified
+
+-
+
+📦 Common Cache-Control Rules:
+
+Rule	                    What it Means	                                Example
+
+no-store	                Don’t save it at all	                        Login pages
+no-cache	                Revalidate before using	                        Dynamic data
+private	                    Only browser can cache	                        User dashboard
+public	                    Can be cached by anyone	                        Images, CSS
+max-age=3600	            Cache for 1 hour	                            Static assets
+s-maxage=3600	            Cache for 1 hour on shared (proxy) cache	    CDN-level caching
+
+
+
+🧠 Example:
+
+1. Static file (CSS or image):
+
+Cache-Control: public, max-age=86400
+
+    Cache this publicly for 1 day (86400 seconds).
+
+2. User-specific page (like /account):
+
+Cache-Control: private, no-store
+
+    Don’t cache this or let others store it — it’s sensitive.
+
+-
+
+🚫 Misuse Example (Web Cache Deception):
+
+If a private page returns:
+
+Cache-Control: public
+
+…then the sensitive info can be cached, leading to leaks.
+
+-
+
+
+
+
+
+
+
+
+
+
