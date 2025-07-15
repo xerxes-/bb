@@ -1,1 +1,25 @@
+It is a type of attack where an attacker tricks a website into storing private or sensitive information in a public cache (like a CDN or proxy), which anyone can then access.
+
+-
+
+🔍 Simple Example:
+
+Imagine a website has a "My Account" page at:
+
+https://example.com/account
+
+This page is meant only for logged-in users, and should never be cached because it shows personal data.
+
+
+Now the attacker tricks the site by visiting a fake URL like:
+
+https://example.com/account/random.jpg
+
+    The site still shows the account page, because it ignores the fake .jpg.
+
+    The web cache sees .jpg and thinks it's a static file, so it stores the page.
+
+    Now if anyone else visits that same URL, they see the attacker's account info!
+
+-
 
