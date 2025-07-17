@@ -410,12 +410,48 @@ Here's why:
 
 -
 
+Delimiter Decoding Discrepancies
+
+URLs often contain special characters (like #, ?) that are URL-encoded (e.g., %23, %3f) to be treated as data. 
+However, some servers decode these characters before processing, which can cause the URL path to be truncated if a delimiter is revealed.
+
+If the cache and origin server decode differently, they may interpret the same URL in different ways, leading to cache deception.
 
 
+Example 1: /profile%23wcd.css
+
+    > Origin server decodes %23 to # and treats it as a delimiter → returns /profile data.
+
+    > Cache doesn’t decode %23 → sees full path /profile%23wcd.css → may cache response as .css.
 
 
+Example 2: /myaccount%3fwcd.css
+
+    > Cache checks .css extension in /myaccount%3fwcd.css, decides to store it.
+
+    > Then decodes %3f to ? and forwards /myaccount?wcd.css to the origin.
+
+    > Origin server sees ? as a delimiter → serves data for /myaccount.
 
 
+"Decides to store it" means:
 
+The cache server first receives the response from the origin server, and then decides whether to store it.
+
+
+So the actual flow is:
+
+    > Client sends: /myaccount%3fwcd.css
+
+    > Cache sees .css, flags this URL as possibly cacheable based on its rules.
+
+    > Cache decodes %3f → ? and sends /myaccount?wcd.css to the origin server
+
+    > Origin server interprets it as a request to /myaccount with query wcd.css, and returns sensitive user data.
+
+    > Cache gets the response and, because the original URL looked like a .css file and caching is allowed, it stores that sensitive response under /myaccount%3fwcd.css
+
+
+1.3 
 
 
