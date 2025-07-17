@@ -258,7 +258,64 @@ It isn't always indicative of caching, as the cache may sometimes override this 
 
 If you notice a big difference in response time for the same request, this may also indicate that the faster response is served from the cache. 
 
+--
+
+Vulns:
+
+1. Exploiting static extension cache rules
+
+CDNs often cache content based on file extensions like .css or .js, assuming they're static. 
+If the cache and origin server interpret URLs differently—especially with how paths or delimiters are handled—an attacker can exploit this mismatch.
+
+For example, a dynamic resource can be requested using a static-looking extension that the origin server ignores but the cache accepts, potentially leading to Web Cache Deception.
+
+Path Mapping Discrepancies
+
+URL path mapping links URL paths to server resources and varies by framework. Two main types are:
+
+    a> Traditional Mapping: Maps directly to file system paths (e.g. /path/resource.html).
+
+    b> REST-style Mapping: Uses logical endpoints and parameters (e.g. /user/123/profile).
+
+
+
+In a mismatch scenario:
+
+http://example.com/user/123/profile/wcd.css
+
+    - The origin server (using REST-style) treats it as a request for /user/123/profile, ignoring wcd.css.
+
+    - The cache (using traditional mapping) sees it as /user/123/profile/wcd.css and may cache the dynamic profile data as if it were a .css file.
+
+
+This results in sensitive dynamic data being cached and served to unintended users.
+
+
+1.1 Exploiting path mapping discrepancies
+
+To test how the origin server maps the URL path to resources, add an arbitrary path segment to the URL of your target endpoint. 
+If the response still contains the same sensitive data as the base response, it indicates that the origin server abstracts the URL path and ignores the added segment. 
+For example, this is the case if modifying /api/orders/123 to /api/orders/123/foo still returns order information.
+
+To test how the cache maps the URL path to resources, you'll need to modify the path to attempt to match a cache rule by adding a static extension. 
+For example, update /api/orders/123/foo to /api/orders/123/foo.js. If the response is cached, this indicates:
+
+    > That the cache interprets the full URL path with the static extension.
+    > That there is a cache rule to store responses for requests ending in .js.
+
+Caches may have rules based on specific static extensions. Try a range of extensions, including .css, .ico, and .exe.
+
+You can then craft a URL that returns a dynamic response that is stored in the cache. 
+Note that this attack is limited to the specific endpoint that you tested, as the origin server often has different abstraction rules for different endpoints. 
+
 -
+
+
+
+
+
+
+
 
 
 
