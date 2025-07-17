@@ -343,6 +343,74 @@ URL: /profile%00foo.js
 
 
 
+1.2 Exploiting Delimiter Discrepancies
+
+You can exploit delimiter differences between the origin server and cache to add a fake static extension (like .js or .css) that tricks the cache but is ignored by the server.
+
+Step-by-Step:
+
+    a) Find Delimiters Used by the Origin Server:
+
+        - Add a random string to a URL (e.g., /settings/users/listaaa) and note the response.
+
+        - Then try adding a delimiter before the string (e.g., /settings/users/list;aaa).
+
+        - If the response matches the original /settings/users/list, the server is treating ; as a delimiter.
+
+
+    b) Check if the Cache Ignores the Delimiter:
+
+        - Add a static extension (e.g., /settings/users/list;aaa.js).
+
+        - If the response is cached, it means:
+
+             > The cache sees the full path (including .js).
+
+             > The origin server ignores .js and returns dynamic content.
+
+        - This causes the cache to store and serve sensitive data as if it were a static file.
+
+
+Notes:
+
+    Test various delimiters (;, ., %00, etc.) and extensions (.css, .ico, .exe, etc.).
+
+    Use Burp Intruder to automate testing. Disable automatic encoding to test raw characters.
+
+    This technique often works across multiple endpoints once a working delimiter is found.
+
+
+Browser Warning: Some characters (<, >, {, }, #) may be URL-encoded or blocked by the browser. Use encoded versions if needed.
+
+
+Q. Why are we testing this /settings/users/listaaa
+
+A. We test something like /settings/users/listaaa as a control step to understand how the origin server handles unexpected or malformed URLs.
+
+Here's why:
+
+    a) Baseline Behavior Check
+
+        When you try /settings/users/listaaa, you're adding an unexpected string to a valid path.
+
+        If the server responds exactly like /settings/users/list, it may be ignoring the extra string or redirecting to a clean URL.
+
+        If the response is different (like an error or 404), it means the server treats it as a separate path.
+
+
+    b) Helps Test Delimiters
+
+    Once you know how the server reacts to a broken path:
+
+        You add a delimiter: /settings/users/list;aaa
+
+        Then compare its response to /settings/users/list and /settings/users/listaaa
+
+        If it matches /settings/users/list, then the server is treating ; as a delimiter and ignoring the part after it.
+
+-
+
+
 
 
 
