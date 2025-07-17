@@ -310,15 +310,36 @@ Note that this attack is limited to the specific endpoint that you tested, as th
 
 -
 
+Delimiter Discrepancies in Web Cache Deception
+
+Delimiters (like ?, ;, ., %00) define boundaries in URLs. 
+While some are standardized, different frameworks interpret them differently, which can lead to cache deception vulnerabilities.
+
+Example 1: ; Delimiter (Java Spring)
+URL: /profile;foo.css
+
+    > Origin server (Spring) treats ; as a matrix variable delimiter, truncates at /profile, and returns profile info.
+
+    > Cache may treat ;foo.css as part of the path, see .css, and cache the profile response as a CSS file.
 
 
+Example 2: . Delimiter (Ruby on Rails)
+
+    /profile → returns HTML profile.
+
+    /profile.css → unrecognized formatter, returns error.
+
+    /profile.ico → .ico not recognized, defaults to HTML response.
+
+If the cache stores .ico responses, it could wrongly cache and serve the HTML profile data as a static icon.
 
 
+Example 3: Encoded %00 Null Byte (OpenLiteSpeed)
+URL: /profile%00foo.js
 
+    > OpenLiteSpeed treats %00 as a delimiter, interprets path as /profile.
 
-
-
-
+    > Other frameworks may error out, but caches (e.g., Akamai, Fastly) may treat %00foo.js as the full path and cache the response.
 
 
 
