@@ -452,6 +452,36 @@ So the actual flow is:
     > Cache gets the response and, because the original URL looked like a .css file and caching is allowed, it stores that sensitive response under /myaccount%3fwcd.css
 
 
-1.3 
+
+🔁 So to answer your earlier question:
+
+    ❓ At a time, only one server decodes — right?
+
+✅ Yes, in most real-world cases, only one server decodes a specific character — either:
+
+    The cache decodes before forwarding, or
+
+    The origin receives the raw encoded URL and decodes it internally
+
+🛑 They don’t both decode the same character independently — because once it's decoded, it doesn't stay encoded.
+
+
+
+1.3 Exploiting delimiter decoding discrepancies
+
+Use the same testing methodology you used to identify and exploit delimiter discrepancies, but use a range of encoded characters. 
+Make sure that you also test encoded non-printable characters, particularly %00, %0A and %09. 
+If these characters are decoded they can also truncate the URL path. 
+
+-
+
+
+
+
+
+
+
+
+
 
 
