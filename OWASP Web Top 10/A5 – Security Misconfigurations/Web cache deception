@@ -606,7 +606,14 @@ For example, consider the payload /profile;%2f%2e%2e%2fstatic. The origin server
 
 The origin server returns the dynamic profile information, which is stored in the cache. You can therefore use this payload for an exploit. 
 
+--
 
+3. Exploiting file name cache rules
+
+Certain files such as robots.txt, index.html, and favicon.ico are common files found on web servers. 
+They're often cached due to their infrequent changes. Cache rules target these files by matching the exact file name string.
+
+To identify whether there is a file name cache rule, send a GET request for a possible file and see if the response is cached. 
 
 
 
