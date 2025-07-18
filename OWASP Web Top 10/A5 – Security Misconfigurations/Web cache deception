@@ -522,6 +522,42 @@ You can also try encoding the full path traversal sequence, or encoding a dot in
 
 
 
+Detecting Normalization by the Cache Server
+
+1. Find Cached Static Files
+   In Burp's HTTP history, filter for `2xx` responses and static file types (like `.js`, `.css`, images) to spot cached resources in common static directories (e.g., `/assets/`).
+
+2. Test With Path Traversal (Before Directory)
+   Modify a cached URL like:
+   `/assets/js/stockCheck.js` → `/aaa/..%2fassets/js/stockCheck.js`
+
+   * If response is not cached → Cache did not normalize the path
+   * If still cached → Cache likely normalized to `/assets/js/stockCheck.js`
+
+3. Test With Path Traversal (Inside Directory)
+   Try:
+   `/assets/js/stockCheck.js` → `/assets/..%2fjs/stockCheck.js`
+
+   * If response is not cached → Cache normalized to `/js/stockCheck.js`
+   * If still cached → Cache did not normalize
+
+
+
+✅ Now what do the results mean?
+
+Response	        What it Means
+
+Not Cached	        Cache decoded %2f to / and resolved .., turning the path into /js/stockCheck.js — which is a different path from the original, so it’s not cached.
+Still Cached	    Cache did not decode %2f or resolve .., so it treated the path literally as /assets/..%2fjs/stockCheck.js — which it thinks is the same or similar to the original, so it's still cached.
+
+
+
+4. Confirm Directory-Based Caching
+   Replace filename with garbage: `/assets/aaa`
+
+   * If cached → Cache rule is likely based on `/assets`
+   * If not cached → May still be cached, but 404 responses are often not stored
+
 
 
 
