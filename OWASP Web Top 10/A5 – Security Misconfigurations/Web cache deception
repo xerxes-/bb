@@ -473,9 +473,51 @@ Use the same testing methodology you used to identify and exploit delimiter disc
 Make sure that you also test encoded non-printable characters, particularly %00, %0A and %09. 
 If these characters are decoded they can also truncate the URL path. 
 
--
+--
+
+2. Exploiting static directory cache rules
+
+It's common practice for web servers to store static resources in specific directories. 
+Cache rules often target these directories by matching specific URL path prefixes, like /static, /assets, /scripts, or /images. 
+These rules can also be vulnerable to web cache deception. 
 
 
+Normalization discrepancies
+
+Normalization involves converting various representations of URL paths into a standardized format. 
+This sometimes includes decoding encoded characters and resolving dot-segments, but this varies significantly from parser to parser.
+
+Discrepancies in how the cache and origin server normalize the URL can enable an attacker to construct a path traversal payload that is interpreted differently by each parser. 
+
+Consider the example /static/..%2fprofile:
+
+> An origin server that decodes slash characters and resolves dot-segments would normalize the path to /profile and return profile information.
+A cache that doesn't resolve dot-segments or decode slashes would interpret the path as /static/..%2fprofile. 
+
+> If the cache stores responses for requests with the /static prefix, it would cache and serve the profile information.
+
+
+
+Detecting URL Normalization by the Origin Server
+
+To check if the origin server normalizes the URL path, use a non-cacheable request (like POST) and add a path like /aaa/..%2fprofile.
+Example:
+
+Test /profile vs. /aaa/..%2fprofile
+(%2f = /)
+
+    If the response matches /profile → the server decoded %2f and resolved .. → path became /profile
+
+    If it returns an error or different response → the server did not decode or normalize the path
+
+This helps identify how the origin server handles encoded slashes and dot segments.
+
+
+
+
+Note:
+When testing for normalization, start by encoding only the second slash in the dot-segment. This is important because some CDNs match the slash following the static directory prefix.
+You can also try encoding the full path traversal sequence, or encoding a dot instead of the slash. This can sometimes impact whether the parser decodes the sequence.
 
 
 
