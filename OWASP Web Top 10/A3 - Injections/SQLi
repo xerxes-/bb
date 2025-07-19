@@ -196,8 +196,8 @@ Therefore, we will induce error in the app so that we know when our injected que
 
 To see how this works, suppose that two requests are sent containing the following TrackingId cookie values in turn:
 
-xyz' AND (SELECT CASE WHEN (1=2) THEN 1/0 ELSE 'a' END)='a
-xyz' AND (SELECT CASE WHEN (1=1) THEN 1/0 ELSE 'a' END)='a
+xyz' AND (SELECT CASE WHEN (1=2) THEN 1/0 ELSE 'a' END)='a     TRUE
+xyz' AND (SELECT CASE WHEN (1=1) THEN 1/0 ELSE 'a' END)='a     FALSE
 
 With the first input, the CASE expression evaluates to 'a', which does not cause any error.
 With the second input, it evaluates to 1/0, which causes a divide-by-zero error.
