@@ -1,0 +1,688 @@
+GraphQL API vulnerabilities
+---------------------------
+
+GraphQL Basics:
+
+* Schema: Defines the structure of the GraphQL API — what data types exist and what can be queried or modified.
+
+  * Example: It defines types like `User`, and operations like `getUser` or `createUser`.
+
+
+In GraphQL, there are two main types of operations:
+
+    Query – for reading/fetching data (like getUser, viewPosts)
+
+    Mutation – for writing/changing data (like login, signup, updatePassword)
+
+
+* Queries: Used to fetch data from the server (read-only).
+
+  * Example: `query { user(id: 1) { name } }`
+
+* Mutations: Used to modify data (create, update, delete).
+
+  * Example: `mutation { createUser(name: "John") { id } }`
+
+How they relate:
+
+* The schema defines what queries and mutations are allowed.
+* Queries read data defined in the schema.
+* Mutations change data as allowed by the schema.
+
+-
+
+🔍 Discovering GraphQL Schema
+
+1. Introspection
+
+* GraphQL has a built-in feature called introspection to fetch schema details.
+* You can query the `__schema` field to list available queries, mutations, types, etc.
+* Example probe:
+
+  ```json
+  { "query": "{ __schema { queryType { name } } }" }
+  ```
+
+In GraphQL, if you don’t specify query, it defaults to a query operation.
+
+So this shorthand is valid and commonly used.
+
+
+
+2. Full Introspection Query
+
+* A full introspection query reveals:
+  * All types, fields, arguments, mutations, subscriptions, etc.
+
+* These queries can be very long and may need tweaks (e.g., remove `onOperation`, `onField`, `onFragment` if errors occur).
+* You can visualize results using GraphQL visualizers.
+
+3. When Introspection is Disabled
+
+* It's common (but not guaranteed) for production APIs to disable introspection.
+* Even then, you may gather schema info through error suggestions.
+
+4. Using Suggestions
+
+* Some servers (like Apollo) suggest correct field names in errors:
+  * Example: `"Did you mean 'productInformation'?"`
+
+* Tools like Clairvoyance automate this process to rebuild schemas even without introspection.
+
+-
+
+Bypassing GraphQL introspection defenses
+
+If you cannot get introspection queries to run for the API you are testing, try inserting a special character after the __schema keyword.
+
+When developers disable introspection, they could use a regex to exclude the __schema keyword in queries. You should try characters like spaces, new lines and commas, as they are ignored by GraphQL but not by flawed regex.
+
+As such, if the developer has only excluded __schema{, then the below introspection query would not be excluded. 
+
+
+ #Introspection query with newline
+
+    {
+        "query": "query{__schema
+        {queryType{name}}}"
+    }
+
+adding query is just a more explicit form — useful when trying to bypass weak filters or for clarity in tooling.
+
+
+If this doesn't work, try running the probe over an alternative request method, as introspection may only be disabled over POST. Try a GET request, or a POST request with a content-type of x-www-form-urlencoded.
+
+The example below shows an introspection probe sent via GET, with URL-encoded parameters. 
+
+
+  # Introspection probe as GET request
+
+    GET /graphql?query=query%7B__schema%0A%7BqueryType%7Bname%7D%7D%7D
+
+
+
+URL decoded will be:
+
+query{__schema
+{queryType{name}}}
+
+
+
+Format					Works?		Reason
+
+{ __schema { ... } }			✅		Shorthand query syntax
+query { __schema { ... } }		✅		Explicit query declaration
+"query{__schema\n{...}}"		✅		Same, but obfuscated for bypass
+
+
+-
+
+diff bw:
+
+{
+  "query": "{ __typename }"
+}
+
+and
+
+ {
+        "query": "query{__schema{queryType{name}}}"
+    }
+
+
+
+1️⃣
+
+```json
+{
+  "query": "{ __typename }"
+}
+```
+
+🔹 What it does:
+
+* Asks for the type name of the root query object.
+* Usually returns:
+
+  ```json
+  { "data": { "__typename": "Query" } }
+  ```
+
+🔹 Purpose:
+
+* Quick probe to check if the endpoint is GraphQL.
+* Doesn’t reveal schema details — just checks if GraphQL responds.
+
+
+2️⃣
+
+```json
+{
+  "query": "query{__schema{queryType{name}}}"
+}
+```
+
+🔹 What it does:
+
+* Queries the special `__schema` field.
+* Returns the name of the root query type (usually `"Query"`).
+
+🔹 Purpose:
+
+* Tests if introspection is enabled.
+* First step in discovering the schema structure.
+
+
+✅ Summary Table:
+
+| Query                                       | Purpose                     | Reveals?                 |
+| ------------------------------------------- | --------------------------- | ------------------------ |
+| `{ __typename }`                            | Is this a GraphQL endpoint? | Only type name (`Query`) |
+| `query { __schema { queryType { name } } }` | Is introspection enabled?   | Schema info begins here  |
+
+-
+
+🧭 GraphQL Endpoint Discovery (Simplified)
+
+When you're trying to find if a target is using GraphQL, test common endpoint paths like:
+
+```
+/graphql
+/api
+/api/graphql
+/graphql/api
+/graphql/graphql
+```
+
+There’s no fixed GraphQL path, so you guess these paths during recon or bug bounty testing.
+
+---
+
+🚀 How to Test Each Path
+
+For each suspected endpoint, send a universal query like:
+
+```json
+{ "query": "{ __typename }" }
+```
+
+This query checks if the endpoint responds like a GraphQL service.
+
+
+success response:
+
+{
+  "data": {
+    "__typename": "Query"
+  }
+}
+
+
+---
+
+✅ Use POST (Standard Method)
+
+Most GraphQL servers expect:
+
+* POST
+* `Content-Type: application/json`
+* JSON body: `{ "query": "{ __typename }" }`
+
+Example using curl:
+
+```bash
+curl -X POST https://target.com/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ __typename }"}'
+```
+
+
+🟡 Can You Use GET?
+
+Yes, some GraphQL servers also accept GET requests — especially for read-only queries like `__typename`.
+
+Example:
+
+```bash
+curl "https://target.com/graphql?query={__typename}"
+```
+
+But: POST is more common and reliable. GET may be blocked, limited, or cached.
+
+
+❓ If Responses Are Inconsistent but "Feel" GraphQL
+
+If you're getting strange or partial responses, but you suspect it's GraphQL, look for signs like:
+
+| Response Content                        | What It May Indicate                              |
+| --------------------------------------- | ------------------------------------------------- |
+| `"Must provide query string."`          | Likely GraphQL — you're missing the `query` field |
+| `"Cannot query field '__typename'"`     | It's GraphQL, but introspection may be blocked    |
+| `"Unexpected token"` / JSON parsing err | Wrong content type or malformed body              |
+| HTML error page                         | Not GraphQL or wrong method/format                |
+
+
+🧪 What to Do Next
+
+* Try different methods (GET and POST)
+* Try different headers (`Content-Type`, `Accept`)
+* Try alternative queries (`__schema`, named query blocks)
+* Use tools like:
+
+  * Burp (manual or Scanner)
+  * Clairvoyance (schema suggestion harvesting)
+  * GraphQL Voyager (for visualization)
+
+
+🔚 TL;DR
+
+1. Test common paths like `/graphql`, `/api/graphql`, etc.
+2. Use POST + `__typename` to confirm.
+3. Try GET if POST fails — but it's less reliable.
+4. If the response hints at GraphQL (e.g., "Must provide query"), try sending better-formed GraphQL queries.
+5. Tools like Burp, Clairvoyance, or custom scripts can help automate this.
+
+-
+
+🔍 What is Introspection in GraphQL?
+
+Introspection is a built-in feature of GraphQL that lets you ask the API about itself.
+
+You can send special queries to discover:
+
+* All available types (`User`, `Product`, etc.)
+* All fields and arguments for each type
+* Available queries, mutations, and subscriptions
+* Descriptions, default values, and more
+
+
+🎯 Purpose of Introspection
+
+1. Discover the API structure
+   → You don’t need external docs — the API tells you what it can do.
+
+2. Power developer tools
+   → Tools like GraphiQL, Postman, Insomnia, and VS Code GraphQL plugins use introspection to auto-suggest fields.
+
+3. Recon in security testing
+   → Bug bounty hunters use introspection to reveal hidden or sensitive operations (like `deleteUser`, `getAllPayments`, etc.).
+
+
+
+Send an Introspection Query
+
+Use Burp Suite to send a POST request.
+
+1.  Minimal Introspection Probe (to check if it’s enabled):
+
+```json
+{
+  "query": "query{__schema{queryType{name}}}"
+}
+```
+
+
+
+If you get back data like:
+
+{
+  "data": {
+    "__schema": {
+      "queryType": {
+        "name": "Query"
+      }
+    }
+  }
+}
+
+→ 🎯 Introspection is enabled
+
+If you see:
+
+{
+  "errors": [ { "message": "Introspection is disabled" } ]
+}
+
+→ ❌ It’s blocked (common in production)
+
+
+
+2. Full Introspection Query (reveals everything):
+
+Use the full IntrospectionQuery — often generated automatically by tools.
+
+
+✅ Steps in Burp to Run a Full Introspection Query
+
+1. Send a GraphQL request to Repeater
+
+   * Open Burp browser and interact with the site.
+   * In the HTTP history, find a GraphQL request (usually to `/graphql`).
+   * Right-click → Send to Repeater
+
+2. Use Burp's GraphQL helper
+
+   * In Repeater, right-click the request →
+     "GraphQL" → "Insert introspection query"
+
+3. Verify or set headers
+
+   * Make sure:
+
+     * Method: `POST`
+     * Header: `Content-Type: application/json`
+
+4. Send the request
+
+   * Click Send
+   * If introspection is enabled, you'll get a large JSON response with schema details.
+
+
+
+🔍 Result
+
+You’ll see fields like:
+
+```json
+{
+  "data": {
+    "__schema": {
+      "queryType": { "name": "Query" },
+      "types": [...],
+      ...
+    }
+  }
+}
+```
+
+If introspection is disabled, you may see:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Introspection is not allowed",
+      ...
+    }
+  ]
+}
+```
+
+
+🧠 Tip
+
+If the query fails due to `"onField"`, `"onFragment"`, or `"onOperation"`, delete those lines from the introspection query manually in the body.
+
+
+ ✅ TL;DR:
+
+Yes — in Burp:
+
+> Right-click → GraphQL → Insert introspection query → Send
+> And you're good to go.
+
+
+
+
+⚠️ Security Note
+
+Because it can expose sensitive backend functionality, introspection is often disabled in production — but not always.
+
+
+✅ TL;DR
+
+Introspection lets you explore a GraphQL API's full structure by querying it — useful for devs and attackers alike.
+
+-
+
+Q: How to do full introspection query on a request that is not a graphql endpoint but we got positive response for minimum Introspection Probe?
+
+🧠 Situation Recap
+
+* You sent a minimal introspection probe like:
+
+  ```json
+  { "query": "{ __schema { queryType { name } } }" }
+  ```
+* And you got a positive response, even though the URL didn’t "look like" a GraphQL endpoint (e.g., maybe `/api` or `/data`, not `/graphql`)
+
+
+Now you're wondering:
+
+> How do I run a *full* introspection query on this non-standard URL?
+
+
+
+✅ Here's Exactly What to Do
+
+🔹 Step 1: Confirm the request is GraphQL
+
+If the minimal probe responded with:
+
+```json
+{
+  "data": {
+    "__schema": {
+      "queryType": { "name": "Query" }
+    }
+  }
+}
+```
+
+✅ That *is* a GraphQL endpoint — even if the path is unusual (`/api`, `/data`, etc.).
+
+
+🔹 Step 2: Send that request to Burp Repeater
+
+* In Burp Proxy > HTTP history, find the successful introspection probe
+* Right-click → Send to Repeater
+
+
+🔹 Step 3: Insert the Full Introspection Query
+
+* In Repeater, right-click the request body →
+  GraphQL → Insert introspection query
+
+* Burp will auto-populate a full schema query.
+
+
+🔹 Step 4: Confirm Headers & Method
+
+* Method: `POST`
+* Headers:
+
+  ```
+  Content-Type: application/json
+  ```
+
+
+🔹 Step 5: Send and Analyze
+
+* Click Send
+* If introspection is fully enabled, you'll get a large JSON schema dump
+* If it fails:
+
+  * You might see errors about `onField`, `onFragment`, etc.
+  * In that case, delete those problematic fields manually from the query
+
+
+🧪 Why This Works
+
+GraphQL endpoints don’t have to live at `/graphql`. If your probe succeeds at `/api`, then `/api` is the endpoint — treat it as such.
+
+
+✅ TL;DR:
+
+> If a minimal introspection probe works on a non-standard URL, just send a full introspection query to that same URL in Burp Repeater — the path doesn’t matter, the behavior does.
+
+-
+
+🔓 Bypassing Rate Limiting with Aliases (Simplified)
+
+Normally, GraphQL doesn’t allow repeating the same field in one query — but aliases let you rename them and send multiple similar operations in one request.
+
+Even if a server has rate limiting based on number of requests, aliases can bypass it because:
+
+* You send one HTTP request,
+* But perform many actions inside it.
+
+This can be abused for brute-force attacks, like checking multiple discount codes in a single query.
+
+💡 Example:
+
+✅ Original GraphQL Request (without aliases, single code check):
+
+```graphql
+query {
+  isvalidDiscount(code: 1111) {
+    valid
+  }
+}
+```
+
+
+🔁 So what's happening in the aliased version?
+
+You're calling the same function (`isvalidDiscount`) multiple times with different inputs, using aliases to label each result separately in the response:
+
+```graphql
+query {
+  check1: isvalidDiscount(code: 1111) { valid }
+  check2: isvalidDiscount(code: 2222) { valid }
+  check3: isvalidDiscount(code: 3333) { valid }
+}
+```
+
+This lets you brute force multiple codes in a single request — potentially bypassing rate limits that count requests rather than individual operations.
+
+
+🔎 TL;DR
+
+* OG request: Just one function call with one code.
+* Aliased version: Multiple calls to the same function with different inputs, all in one HTTP request.
+
+-
+
+🔐 Simplified: How CSRF Happens in GraphQL
+
+CSRF in GraphQL can happen if:
+
+* The API doesn’t check content-type of requests
+* And no CSRF tokens are used
+
+Normally, `application/json` + POST is safe (can't be sent from another site).
+But if the endpoint accepts:
+
+* GET requests
+* Or x-www-form-urlencoded with POST request
+
+...then a browser can send those — making CSRF attacks possible.
+
+So if an endpoint allows those unsafe types, attackers might trick users into sending unwanted requests.
+
+
+
+
+🚨 Here's the truth:
+
+> POST requests are *not inherently safe* from CSRF.
+> They’re only safe if certain protections are enforced, like checking the `Content-Type` or requiring CSRF tokens.
+
+
+🧠 Why POST Isn’t Automatically Safe
+
+Browsers can send POST requests cross-site using `application/x-www-form-urlencoded` by default (e.g. via a `<form>`).
+They cannot send `application/json` POSTs unless extra JavaScript is used (which can't run cross-site due to CORS).
+
+
+🔓 Vulnerable Scenario (CSRF Works)
+
+If a GraphQL endpoint:
+
+* Accepts `POST`
+* Accepts `Content-Type: application/x-www-form-urlencoded`
+* Doesn't require CSRF tokens
+
+Then an attacker can do:
+
+```html
+<form method="POST" action="https://victim.com/graphql">
+  <input name="query" value='mutation { changePassword(new: "hacked123") }'>
+  <input type="submit">
+</form>
+```
+
+Victim visits malicious site → browser sends POST to victim's session → CSRF occurs.
+
+
+✅ Safe Scenario (CSRF Blocked)
+
+If the server:
+
+* Accepts only `Content-Type: application/json`
+* Rejects other content types
+* OR uses CSRF tokens
+
+Then the browser cannot forge such a request without hitting CORS → CSRF is prevented.
+
+
+🔒 Summary
+
+| Request Type                     		| CSRF Safe?                             |
+| -------------------------------- 		| -------------------------------------- |
+| `POST` + `application/json`      		| ✅ Yes (if content-type is checked)     |
+| `POST` + `application/x-www-form-urlencoded`  | ❌ No (CSRF possible via browser forms) |
+| `GET`                           		| ❌ No (always forgeable)                |
+
+So:
+
+> ✅ POST *can be safe*, but only with proper content-type checks or CSRF tokens.
+
+-
+
+✅ Yes — this is true for *normal* CSRF too, not just GraphQL.
+
+
+🔁 Applies to All Web Endpoints (REST, GraphQL, etc.)
+
+Here’s a quick breakdown:
+
+| Request Type                   	     | Can browser send it cross-site? | CSRF Risk? | Notes                                           |
+| ------------------------------ 	     | ------------------------------- | ---------- | ----------------------------------------------- |
+| `GET`                          	     | ✅ Yes                           | ❌ Yes      | CSRF-prone by default                           |
+| `POST + application/x-www-form-urlencoded` | ✅ Yes                           | ❌ Yes      | Most forms use this                             |
+| `POST + application/multipart/form-data`   | ✅ Yes                           | ❌ Yes      | File upload forms                               |
+| `POST + application/json`      	     | ❌ No                            | ✅ Safe\*   | \*Only safe if the server checks `Content-Type` |
+
+> ⚠️ *"Safe"* means browser cannot send it cross-site by default.
+
+
+🛡 Why `application/json` is Safer
+
+* Browsers cannot send `application/json` POSTs cross-origin without JavaScript.
+* But JavaScript cross-origin requests trigger CORS.
+* So unless the server sets CORS headers, the request fails — and CSRF is blocked.
+
+
+🔐 CSRF Protections Apply Universally
+
+Whether it's a:
+
+* Login API (REST)
+* Update password endpoint
+* GraphQL mutation
+
+The rules stay the same:
+
+* Block risky content types
+* Use CSRF tokens
+* Use `SameSite` cookies for extra protection
+
+
+✅ Summary
+
+> CSRF attacks work the same regardless of backend type (GraphQL or REST).
+> What matters is what the browser can send, and what the server accepts.
+
+-
+
