@@ -1,0 +1,563 @@
+✅ Web Cache Poisoning
+
+* Goal: Inject a malicious or manipulated response into the cache.
+* Impact: Affects all users who access the poisoned cached content.
+* Example: Injecting a `X-Forwarded-Host` header to get a cached response with a malicious script — served to everyone.
+
+
+✅ Web Cache Deception
+
+* Goal: Trick the server and cache into storing user-specific (private) content as if it's public.
+* Impact: Affects individual users, but the attacker can access someone else's cached data.
+* Example: Victim visits `/profile.php/random.jpg`, which gets cached. Attacker accesses same URL later and gets victim’s private page.
+
+-
+
+Web cache poisoning involves two phases:
+
+1. Attacker finds a way to get the server to include a harmful payload in its response.
+2. They make sure this response gets cached and served to others.
+
+It can be used to spread attacks like XSS, JavaScript injection, or open redirects.
+
+-
+
+Constructing a web cache poisoning attack
+
+*Involves the following steps:
+
+    1. Identify and evaluate unkeyed inputs
+    2. Elicit a harmful response from the back-end server
+    3. Get the response cached
+
+-
+
+🔁 Normal Cache Behavior:
+
+Cache uses the cache key (usually made from URL, method, sometimes headers) to decide:
+
+    "Have I seen this request before?"
+
+    "If yes, serve cached response."
+
+
+🔓 What Happens with Unkeyed Inputs:
+
+    You send an unkeyed input (e.g., X-Forwarded-Host: attacker.com) that changes the server’s response, but doesn’t affect the cache key.
+
+    The cache still stores that altered response under the normal key (e.g., just /home).
+
+    Now, future users who visit /home get the malicious (poisoned) version — even though they never sent that unkeyed input.
+
+
+✅ So What’s New/Dangerous?
+
+You smuggle malicious behavior into the cache by tricking it — the cache thinks it's a normal response, but it actually contains injected content.
+
+
+
+
+
+📦 You:
+
+Send a request like:
+
+```
+GET / HTTP/1.1  
+Host: victim.com  
+X-Forwarded-Host: attacker.com
+```
+
+
+🔧 Now What *Could* Happen?
+
+Some websites (especially behind proxies or load balancers) trust the `X-Forwarded-Host` header.
+
+If they do, they might use it to:
+
+1. Build links:
+
+   * Instead of using `victim.com`, they build links like:
+
+     ```
+     https://attacker.com/reset?token=abc123
+     ```
+
+2. Do redirects:
+
+   * When you log in or out, it redirects you to `attacker.com`
+
+3. Cache responses:
+
+   * If the page uses `X-Forwarded-Host` to decide what content to return, but the cache ignores it, the wrong content might get stored.
+
+
+🧠 Why It Matters:
+
+Let’s say the site creates an email link:
+
+> "Click here to reset your password: https\://attacker.com/reset?token=abc"
+
+That's your header controlling their link = big problem.
+Attackers can use this to:
+
+* Steal tokens (phishing)
+* Poison cache
+* Fake pages or links
+
+
+✅ Final Summary:
+
+> `X-Forwarded-Host: attacker.com` tricks the server into thinking the original request came from attacker.com. If the server uses that info in links or redirects, it can lead to serious bugs.
+
+
+
+
+
+
+✅ Realistic Explanation:
+
+
+Original (before poisoning):
+
+```html
+<script src="https://victim.com/app.js"></script>
+<script src="https://victim.com/ui.js"></script>
+```
+
+Let’s say the web app generates URLs like:
+
+```html
+<script src="https://{{Host}}/app.js"></script>
+<script src="https://victim.com/ui.js"></script>
+```
+
+* The first one uses the `Host` dynamically (maybe built from `X-Forwarded-Host`)
+* The second one is hardcoded or safe
+
+
+🔥 Attacker sends:
+
+```http
+X-Forwarded-Host: attacker.com
+```
+
+Now the app builds:
+
+```html
+<script src="https://attacker.com/app.js"></script>  ← attacker controls this
+<script src="https://victim.com/ui.js"></script>     ← still from victim.com
+```
+
+Because only the dynamic ones change.
+
+
+✅ TL;DR:
+
+* Not everything becomes `attacker.com`
+* Only the parts that use the unkeyed input (`Host`) get poisoned
+* So it’s very common to see a mix: some scripts still from `victim.com`, one from `attacker.com`
+
+This mix can still be enough to fully compromise the user.
+
+-
+
+*
+
+1.	🔍 Identify and evaluate unkeyed inputs
+
+
+Web cache poisoning relies on unkeyed inputs — parts of a request (like headers) that affect the response but are ignored by the cache when deciding what to serve.
+
+
+✅ Goal:
+
+Find such inputs so you can inject a payload that gets cached and served to others.
+
+
+🧪 How to Find Unkeyed Inputs
+
+* Manual: Add random headers or parameters to a request. If they change the response but the cache still hits → they’re unkeyed.
+* Use tools like Burp Comparer to spot differences between responses.
+
+
+⚙️ Automate with Param Miner
+
+* Add Param Miner from Burp’s BApp Store.
+* Right-click a request → "Guess headers"
+* It tests many headers to see which affect responses.
+* Results show up in:
+
+  * Issues tab (Burp Pro)
+  * Output tab (Burp Community)
+
+
+ ⚠️ Caution (Don’t Poison Real Users!)
+
+When testing, add a cache buster (e.g., `?nocache=1234`) to avoid affecting real users.
+Param Miner can also do this automatically.
+
+
+
+2. Elicit a harmful response from the back-end server
+
+Once you find an unkeyed input, check how the server uses it.
+If the input shows up in the response (especially unsanitized), or affects other content, it could be used to poison the cache.
+
+
+🧪 Example:
+
+You send:
+
+```http
+GET /home  
+X-Forwarded-Host: attacker.com
+```
+
+Server responds with:
+
+```html
+<a href="https://attacker.com/logout">Logout</a>
+```
+
+✅ If this response gets cached, every user who visits `/home` will now see a link to attacker.com — this is web cache poisoning.
+
+
+
+3. Get the response cached
+
+Triggering a harmful response is only useful if it gets cached — and that can be tricky.
+
+Caching depends on things like:
+
+    URL path or extension
+
+    Content type
+
+    Status code
+
+    Response headers
+
+🧪 You’ll need to test different pages and inputs to see what gets cached.
+Once you manage to cache your malicious response, you’re ready to target users.
+
+-
+
+✅ Step-by-Step of a Cache Poisoning Attack(response is cached)
+
+
+🧑‍💻 1. Attacker sends this:
+
+```http
+GET /home
+Host: victim.com
+X-Forwarded-Host: attacker.com
+```
+
+* `X-Forwarded-Host` is unkeyed (ignored by cache)
+* But the server uses it to build part of the HTML
+
+
+💥 Server responds with:
+
+```html
+<script src="https://attacker.com/app.js"></script>
+```
+
+✅ This response gets cached by the server under the URL `/home`
+
+
+👥 2. Now a normal user sends:
+
+```http
+GET /home
+Host: victim.com
+```
+
+They do not send any special headers.
+
+BUT — because the cached version of `/home` already exists (from the attacker’s request)...
+
+
+💣 The cache returns:
+
+```html
+<script src="https://attacker.com/app.js"></script>
+```
+
+Even though this user never used `attacker.com` — they got a poisoned response from cache.
+
+
+✅ So When We Say:
+
+> `GET /home` → gets served with the attacker-controlled script
+
+It means:
+The normal request to `/home` returns a malicious page, because the cached version was poisoned earlier.
+
+
+-
+
+
+✅ When the response *is cached (successful poisoning):*\*
+
+* Attacker sends a request with unkeyed input (`X-Forwarded-Host: attacker.com`)
+* Server builds a malicious response (e.g., with attacker.com links)
+* Cache stores this response under `/home`
+* Now, all users visiting `/home` get the poisoned version
+
+🧨 Impact: Attack spreads to everyone using the cached page.
+
+
+❌ When the response is *not cached:*\*
+
+* Attacker still gets the malicious response
+* But the cache doesn't store it (due to cache headers, status code, etc.)
+* Future users get a fresh, clean response from the server
+
+🔒 Impact: The attack only affects the attacker’s session — not others
+
+
+🧠 TL;DR:
+
+| Scenario        | Cached? | Affects Others? | Impact                     |
+| --------------- | ------- | --------------- | -------------------------- |
+| Cached Response | ✅ Yes   | ✅ Yes           | Shared malicious response  |
+| Not Cached      | ❌ No    | ❌ No            | Harmless, private response |
+
+
+-
+
+Exploiting web cache poisoning vulnerabilities
+
+*In 2 ways:
+
+   1. Exploiting cache design flaws
+   2. Exploiting cache implementation flaws
+
+
+
+🧱 Flaws in Cache Design
+
+> Problem in concept / logic
+
+* These are high-level mistakes in how caching was intended to work.
+* Example: A system chooses to exclude headers from the cache key (like `X-Forwarded-Host`) even though they affect responses.
+* Another example: Caching user-specific content without thinking about access control.
+
+🔍 Focus: *"What should be cached?"* and *"Based on what inputs?"*
+
+
+🛠️ Flaws in Cache Implementation
+
+> Problem in code / behavior
+
+* These are bugs or oversights in the actual software that runs the cache.
+* Example: The cache claims to consider a header in the key, but doesn’t due to a coding error.
+* Or: Cache ignores `Cache-Control: no-store` due to misparsing.
+
+🔍 Focus: *"Does the cache work as designed?"*
+
+
+ ✅ TL;DR:
+
+| Type                    | Meaning                               | Example                              |
+| ----------------------- | ------------------------------------- | ------------------------------------ |
+| Design Flaw         | Bad decision in how caching works | Caching sensitive data for all users |
+| Implementation Flaw | Bug in how caching is built       | Header ignored due to parsing bug    |
+
+-
+
+*
+
+1. Exploiting cache design flaws
+
+In short, websites are vulnerable to web cache poisoning if they handle unkeyed input in an unsafe way and allow the subsequent HTTP responses to be cached. 
+This vulnerability can be used as a delivery method for a variety of different attacks. 
+
+
+
+a> Using web cache poisoning to deliver an XSS attack
+
+Perhaps the simplest web cache poisoning vulnerability to exploit is when unkeyed input is reflected in a cacheable response without proper sanitization.
+
+For example, consider the following request and response:
+
+GET /en?region=uk HTTP/1.1
+Host: innocent-website.com
+X-Forwarded-Host: innocent-website.co.uk
+
+HTTP/1.1 200 OK
+Cache-Control: public
+<meta property="og:image" content="https://innocent-website.co.uk/cms/social.png" />
+
+
+Here, the value of the X-Forwarded-Host header is being used to dynamically generate an Open Graph image URL, which is then reflected in the response. 
+Crucially for web cache poisoning, the X-Forwarded-Host header is often unkeyed. 
+
+
+
+In this example, the cache can potentially be poisoned with a response containing a simple XSS payload:
+
+GET /en?region=uk HTTP/1.1
+Host: innocent-website.com
+X-Forwarded-Host: a."><script>alert(1)</script>"
+
+HTTP/1.1 200 OK
+Cache-Control: public
+<meta property="og:image" content="https://a."><script>alert(1)</script>"/cms/social.png" />
+
+
+*The prefix a. is used to make the whole string look like a valid domain name
+
+
+If this response was cached, all users who accessed /en?region=uk would be served this XSS payload. 
+This example simply causes an alert to appear in the victim's browser, but a real attack could potentially steal passwords and hijack user accounts. 
+
+
+
+b> Using web cache poisoning to exploit unsafe handling of resource imports
+
+Some websites use unkeyed headers to dynamically generate URLs for importing resources, such as externally hosted JavaScript files. 
+In this case, if an attacker changes the value of the appropriate header to a domain that they control, they could potentially manipulate the URL to point to their own malicious JavaScript file instead.
+
+If the response containing this malicious URL is cached, the attacker's JavaScript file would be imported and executed in the browser session of any user whose request has a matching cache key.
+
+GET / HTTP/1.1
+Host: innocent-website.com
+X-Forwarded-Host: evil-user.net
+User-Agent: Mozilla/5.0 Firefox/57.0
+
+HTTP/1.1 200 OK
+<script src="https://evil-user.net/static/analytics.js"></script>
+
+
+
+c> Using web cache poisoning to exploit cookie-handling vulnerabilities
+
+
+Web cache poisoning can exploit cookie-based logic if the cache ignores cookies.
+
+
+🧪 Example:
+
+🧩 Two Parts Involved:
+
+    Server logic — uses the cookie to generate personalized content.
+
+    Cache logic — decides whether to store or reuse a response.
+
+
+In this attack:
+
+
+Step 1:
+
+Attacker sends:
+
+GET /blog/post.php?mobile=1 HTTP/1.1
+Host: innocent-website.com
+User-Agent: Mozilla/5.0 Firefox/57.0
+Cookie: language=pl;
+Connection: close
+
+    ✅ Server sees language=pl → returns Polish content.
+
+    ❌ Cache sees only the URL and Host (not the Cookie) → caches the Polish response.
+
+
+
+Step 2:
+
+Now anyone else who visits:
+
+GET /blog/post.php?mobile=1 HTTP/1.1
+Host: innocent-website.com
+User-Agent: Mozilla/5.0 Firefox/57.0
+Cookie: language=en;
+Connection: close
+
+
+    Server wants to give English.
+
+    But the cache hits and sends the Polish version, because:
+
+        The cache key is only /blog/post.php?mobile=1
+
+        The cookie wasn’t part of the key, so cache doesn’t know there's a difference.
+
+
+✅ Summary:
+
+    The cache never cared about the cookie — it cached the first response (Polish) and reused it for everyone, even if their cookie says otherwise.
+
+
+
+d> Using multiple headers to exploit web cache poisoning vulnerabilities
+
+
+Some sites need more advanced cache poisoning — especially when multiple unkeyed inputs are used.
+
+Example:
+
+```
+GET /random HTTP/1.1  
+Host: innocent-site.com  
+X-Forwarded-Proto: http
+```
+
+Response:
+
+```
+HTTP/1.1 301 Moved Permanently  
+Location: https://innocent-site.com/random
+```
+
+This redirect seems fine. But if the `Location` header is built from user input and the response is cached, an attacker can poison the cache to redirect users to a malicious site.
+
+
+*X-Forwarded-Proto tells the backend what protocol (HTTP or HTTPS) the client originally used.
+
+
+
+e> Exploiting responses that expose too much information
+
+Some websites make cache poisoning easier by exposing internal behavior.
+
+
+📦 Cache-control directives
+
+If responses show cache details like:
+
+HTTP/1.1 200 OK
+Via: 1.1 varnish-v4
+Age: 174
+Cache-Control: public, max-age=1800
+
+
+— attackers know when to send payloads to get them cached, avoiding trial-and-error or suspicious traffic.
+
+
+🎯 Vary header
+
+The Vary header tells the cache to use certain headers (like User-Agent) in the cache key.
+
+Attackers can:
+
+    Target specific browsers/devices.
+
+    Choose the most common User-Agent to reach more users.
+
+This helps create precise or large-scale cache poisoning attacks.
+
+
+
+
+
+
+2. Exploiting cache implementation flaws
+
+-
+
+
+
