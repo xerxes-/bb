@@ -1,0 +1,229 @@
+What is SSTI?
+
+It happens when user input is treated as part of a template rather than passed in as data.. 
+This lets attackers inject malicious code into the template, which the server runs. 
+Since it's processed on the server, SSTI can be very dangerous and might let attackers take control of the server.
+
+-
+
+How do SSTI vulnerabilities arise?
+
+It happens when user input is directly added into a template instead of being passed safely as data.
+
+For example, this is safe:
+
+$output = $twig->render("Dear {first_name},", array("first_name" => $user.first_name));
+
+
+But this is vulnerable:
+
+$output = $twig->render("Dear " . $_GET['name']);
+
+
+As template syntax is evaluated server-side, this potentially allows an attacker to place a SSTI payload inside the name parameter as follows:
+http://vulnerable-website.com/?name={{bad-stuff-here}}
+
+-
+
+The double curly braces `{{ }}` are template syntax used by many template engines (like Jinja2, Twig, Liquid, etc.) to output or evaluate expressions.
+
+
+Why `{{bad-stuff-here}}`?
+
+Because inside templates:
+
+* `{{ something }}` tells the engine: evaluate this and print the result.
+
+
+In SSTI:
+
+If an attacker sends:
+
+```
+?name={{7*7}}
+```
+
+And the vulnerable template contains:
+
+Hello {{ name }}
+
+Then the template engine (e.g., Jinja2) replaces {{ name }} with the attacker's input ({{7*7}}), evaluates it on the server, and produces:
+
+Hello 49
+
+
+That confirms SSTI is possible — and with further tricks, attackers may execute code or gain server access.
+
+-
+
+Constructing a SSTI attack / High-Level Methodology
+
+🔍 1. Detect
+
+SSTI bugs often go unnoticed unless you're specifically testing for them. Start by fuzzing inputs using characters like `{{<%[%'"}}%` and see if errors appear — this hints the server is processing templates.
+
+
+There are two contexts where SSTI can appear:
+
+a) Plaintext context
+
+User input is used inside static text.
+Example:
+
+```python
+render('Hello ' + username)
+```
+
+Try:
+
+```
+?username=${7*7}
+```
+
+If the output is `Hello 49`, it confirms SSTI — the math was evaluated server-side.
+
+
+b) Code context
+
+User input is inserted *within* a template expression.
+Example:
+
+```python
+engine.render("Hello {{"+greeting+"}}", data)
+```
+
+Test with:
+
+```
+?greeting=data.username}}<tag>
+```
+
+If `<tag>` is rendered, you're likely in a vulnerable context.
+
+
+2. Identify
+
+Once SSTI is detected, figure out which template engine is used (e.g., Jinja2, Twig, ERB).
+
+* Send invalid syntax like `<%=foobar%>`
+* Error messages often reveal the engine name and version.
+
+You can also test with math payloads like:
+
+```
+${7*7}    → used in Velocity or EL
+{{7*7}}   → Jinja2 or Twig
+<%=7*7%>  → ERB
+```
+
+Be careful: the same payload may behave differently in different engines.
+
+
+3. Exploit
+
+After identifying the engine, use known payloads for that language to:
+
+* Read sensitive data
+* Execute code
+* Gain full control of the server (especially in unsandboxed environments)
+
+-
+
+Exploiting SSTI vulnerabilities
+
+Once you discover a SSTI vulnerability, and identify the template engine being used, successful exploitation typically involves the following process:
+
+    Read
+        Template syntax
+        Security documentation
+        Documented exploits
+    Explore the environment
+    Create a custom attack
+
+
+
+
+
+
+Read
+
+Unless you already know the template engine inside out, reading its documentation is usually the first place to start. 
+While this may not be the most exciting way to spend your time, it is important not to underestimate what a useful source of information the documentation can be.
+
+Learn the basic template syntax
+
+Learning the basic syntax is obviously important, along with key functions and handling of variables. 
+Even something as simple as learning how to embed native code blocks in the template can sometimes quickly lead to an exploit. 
+For example, once you know that the Python-based Mako template engine is being used, achieving remote code execution could be as simple as:
+
+<%
+                import os
+                x=os.popen('id').read()
+                %>
+                ${x}
+
+ What it tries to do:
+
+    <% ... %>:
+
+        This block runs Python code (assuming the template engine supports that).
+
+        It:
+
+            Imports Python's os module
+
+            Runs the shell command id (which returns info about the current user)
+
+            Reads the result into the variable x
+
+    ${x}:
+
+        Prints the result (the output of id) into the rendered response
+
+
+💥 What will appear in the final rendered HTML (if the template is vulnerable and allows this):
+
+uid=1000(www-data) gid=1000(www-data) groups=1000(www-data)
+
+
+
+
+In an unsandboxed environment, achieving remote code execution and using it to read, edit, or delete arbitrary files is similarly as simple in many common template engines. 
+
+
+ So is unsandboxed = live/prod?
+
+Not necessarily:
+
+    Production can be sandboxed/restricted (and should be, for security).
+
+    Development can be unsandboxed/unrestricted (for easier debugging), but still dangerous if exposed.
+
+
+
+
+💡 What is ERB?
+
+ERB stands for Embedded Ruby — it’s a template engine used in Ruby (especially Ruby on Rails) to mix Ruby code with HTML.
+
+It lets you embed Ruby code inside a text document (usually HTML).
+
+
+
+
+Read about the security implications
+
+Template engine docs often include a "Security" section (or similar), listing dangerous features or practices to avoid.
+
+Even without a full section, risky functions usually have warnings. These are helpful for both finding and exploiting SSTI.
+
+
+Example (ERB):
+
+<%= Dir.entries('/') %>       # List directories  
+<%= File.open('/path').read %>  # Read files
+
+Docs can act like a cheat sheet — showing what to look for during testing.
+
+-
+
