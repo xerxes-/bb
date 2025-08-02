@@ -1,0 +1,481 @@
+HTTP Host header attacks
+------------------------
+
+    Password reset poisoning
+    Web cache poisoning
+    Exploiting classic server-side vulnerabilities
+    Bypassing authentication
+    Virtual host brute-forcing
+    Routing-based SSRF
+    Connection state attacks
+
+-
+
+What is the HTTP Host header?
+
+The HTTP Host header is a mandatory request header as of HTTP/1.1. 
+It specifies the domain name that the client wants to access. 
+For example, when a user visits https://portswigger.net/web-security, their browser will compose a request containing a Host header as follows:
+
+GET /web-security HTTP/1.1
+Host: portswigger.net
+
+In some cases, such as when the request has been forwarded by an intermediary system, the Host value may be altered before it reaches the intended back-end component. 
+We will discuss this scenario in more detail below. 
+
+-
+
+Proxy Server:
+
+Sits between client and internet, forwards client requests to servers. 
+Hides the client.
+
+➤ Example: A user configures their browser to use Squid Proxy to access the internet anonymously.
+
+
+
+Reverse Proxy Server:
+
+Sits between internet and backend servers, forwards requests to internal servers. 
+Hides the server.
+
+➤ Example: A website uses Nginx as a reverse proxy to distribute traffic to multiple backend app servers.
+
+
+
+Key difference:
+
+    Proxy protects client identity.
+
+    Reverse proxy protects server identity.
+
+
+
+
+
+🔄 Nginx can perform all roles at the same time, but per request, it behaves according to how you configure it.
+
+🧠 Example: One Nginx, Multiple Roles
+
+Say you configure Nginx like this:
+
+    /static/ → serve files from disk (web server)
+
+    /api/ → proxy to backend app (reverse proxy)
+
+    /app/ → balance load across 3 servers (load balancer)
+
+    /news/ → cache responses (cache)
+
+Then:
+
+    Nginx serves static files directly (not proxying).
+
+    Nginx reverse proxies /api/ requests.
+
+    Nginx load balances /app/ requests.
+
+    Nginx caches /news/ responses.
+
+All of this happens in one Nginx process, using routing rules.
+✅ So yes:
+
+    Nginx can be a web server, reverse proxy, load balancer, and cache all at once, depending on the request path and config.
+
+But for any single request, it only plays the role you assigned for that route.
+
+
+
+
+✅ Short Answer:
+
+Even though Nginx uses the same IP for all roles, it still hides backend server details in its reverse proxy role because:
+
+> The client never directly connects to the backend server.
+> They only connect to Nginx, and Nginx forwards the request behind the scenes.
+
+
+🔍 What makes the backend hidden?
+
+* The client connects to Nginx (e.g., `203.0.113.10`)
+* Nginx internally forwards the request to a backend server (e.g., `127.0.0.1:8000` or `10.0.0.2`)
+* The client only sees Nginx's IP
+* Nginx strips or controls headers (like `Via`, `X-Forwarded-For`) to avoid leaking backend info
+
+
+🧠 Key Idea:
+
+> Hiding the backend doesn’t require a different IP — it just requires controlled access and traffic flow.
+
+Even if Nginx serves both static files and reverse proxies dynamic content using the same IP, the client still can't see:
+
+* Where dynamic content is being fetched from internally
+* What the backend IP or port is
+* Whether it’s a Node.js app, a PHP server, etc.
+
+
+🚧 Unless Misconfigured:
+
+If Nginx leaks headers (e.g., `X-Backend-Server`), uses error messages that reveal backend details, or exposes internal IPs, 
+then the backend can be discovered. But that's a config issue, not a limitation of using one IP.
+
+
+✅ Conclusion:
+
+> Nginx can act as a reverse proxy and serve content from itself on the same IP, while still hiding backend servers, as long as it's properly configured.
+
+-
+
+What is the purpose of the HTTP Host header?
+
+The Host header tells the server which website or app the client wants to access, especially when multiple sites share the same IP.
+
+
+Why is it needed?
+
+In the past, each site had its own IP. But today:
+
+* Many sites share a single IP (due to cloud hosting or IPv4 exhaustion).
+* So servers need a way to tell them apart.
+
+
+Two common scenarios:
+
+1. Virtual Hosting:
+   One server hosts multiple websites (e.g. example.com, test.com) on the same IP.
+
+2. Reverse Proxy / CDN:
+   Traffic goes through a proxy/load balancer that routes it to the correct backend server.
+
+
+How does the Host header help?
+
+It works like writing an apartment number on a letter:
+
+* Same building (IP), but different apartments (domains).
+* The Host header ensures the request reaches the right website or backend.
+
+
+✅ Without it, servers wouldn't know which site or app the request is for.
+
+-
+
+🧨 What is an HTTP Host header attack?
+
+An HTTP Host header attack happens when a website trusts the Host header without checking it properly.
+
+Since the Host header is user-controlled, attackers can:
+
+* Inject fake domains
+* Trick the server into doing harmful things
+
+This is called Host header injection.
+
+
+🔓 Why it’s risky:
+
+Some apps use the Host header to:
+
+* Build links in emails
+* Route traffic internally
+* Communicate between systems
+
+If not validated, attackers can abuse it for:
+
+* Web cache poisoning
+* SSRF (Server-Side Request Forgery)
+* Business logic flaws
+* Other server-side attacks (like SQL injection)
+
+
+✅ Key point:
+
+> Never trust the Host header blindly — always validate and sanitize it.
+
+-
+
+How do HTTP Host header vulnerabilities arise?
+
+They happen when servers wrongly assume the Host header can’t be changed.
+In reality, attackers can easily modify it using tools like Burp Suite.
+
+
+Common causes:
+
+* Trusting the Host header without validation
+* Poor server configuration or using default settings
+* Third-party tools added without understanding their security settings
+* Attackers can even use other headers to override the Host in some setups
+
+
+✅ Key point:
+
+> These issues are often due to misconfiguration, not just bad code.
+
+-
+
+How to Test for HTTP Host Header Vulnerabilities
+
+
+1.	 Modify the Host Header
+
+Use Burp Suite to intercept the request and change the `Host` header to an unexpected or malformed value:
+
+```http
+Host: bad-stuff-here
+```
+
+* If the app still responds normally, it's likely not validating the Host header.
+* If you see changes in the response, redirects, or error messages — that’s a sign of vulnerability.
+
+
+2.  Check for Weak Validation
+
+Try injecting payloads in clever ways:
+
+```http
+Host: vulnerable-website.com:bad-stuff-here
+```
+
+* Some apps only check the domain part, not the port or rest of the header.
+* You can sneak in payloads after a colon or as part of a subdomain.
+
+Other examples:
+
+```http
+Host: hacked-subdomain.vulnerable-website.com
+Host: notvulnerable-website.com
+```
+
+These may bypass filters or logic based on domain name matching.
+
+
+3.  Send Ambiguous Requests
+
+Look for inconsistencies between front-end and back-end systems.
+
+* Duplicate Host headers:
+
+  ```http
+  Host: vulnerable-website.com  
+  Host: bad-stuff-here
+  ```
+
+  → One system may honor the first, another the second.
+
+* Absolute URL with conflicting Host:
+
+  ```http
+  GET https://vulnerable-website.com/ HTTP/1.1  
+  Host: bad-stuff-here
+  ```
+
+* Header line wrapping:
+
+  ```http
+      Host: bad-stuff-here  
+  Host: vulnerable-website.com
+  ```
+
+  → Some servers ignore indented headers; others treat them as part of the previous line.
+
+
+4.  Try Alternate Host Override Headers
+
+If direct `Host` injection fails, try these headers:
+
+```http
+Host: vulnerable-website.com  
+X-Forwarded-Host: bad-stuff-here
+```
+
+Other possible override headers:
+
+* `X-Host`
+* `X-Forwarded-Server`
+* `X-HTTP-Host-Override`
+* `Forwarded`
+
+Some backends trust these headers by default (especially behind proxies or CDNs).
+
+
+🧰 Tools:
+
+* Use Burp Suite, especially Repeater and Param Miner, to test these variations.
+* Param Miner’s "Guess headers" helps auto-detect headers that are supported and exploitable.
+
+
+✅ Goal:
+
+Find cases where your payload (`bad-stuff-here`) affects the app, causing:
+
+* Cache poisoning
+* URL manipulation
+* SSRF
+* Logic flaws
+
+> If any system treats your injected header differently, there may be an exploit path.
+
+---
+
+Exploiting vulnerabilities
+
+
+1.	Password reset poisoning [present in real-world bug bounty targets - check for it]
+
+It is a technique whereby an attacker manipulates a vulnerable website into generating a password reset link pointing to a domain under their control. 
+This behavior can be leveraged to steal the secret tokens required to reset arbitrary users' passwords and, ultimately, compromise their accounts. 
+
+
+
+
+🔐 How Does a Password Reset Work?
+
+1. User enters their email or username to reset password.
+2. Website checks if the user exists and creates a unique, random reset token.
+3. A reset link with the token is emailed to the user:
+
+   ```
+   https://site.com/reset?token=abc123...
+   ```
+4. User clicks the link → site checks the token → lets them set a new password.
+5. Once used, the token is destroyed.
+
+
+
+✅ This method is secure if only the real user can access their email.
+
+⚠️ Password reset poisoning is an attack that tries to steal this token and hijack the reset process.
+
+
+
+
+🧨 How to construct a password reset poisoning attack
+
+
+1. Attacker knows victim's email/username and submits a password reset request.
+
+2. They intercept the request and change the Host header to their own domain (e.g., `evil-user.net`).
+
+3. The reset email sent to the victim contains a valid token, but the link points to the attacker’s server:
+
+   ```
+   https://evil-user.net/reset?token=...
+   ```
+
+4. If the victim (or antivirus) opens the link, the token is sent to the attacker.
+
+5. The attacker uses it on the real site to reset the victim’s password and take over their account.
+
+6. To increase success, the attacker might send a fake breach alert to make the victim more likely to click the link.
+
+
+
+✅ This attack works if the site builds reset links using untrusted Host headers.
+
+
+-
+
+
+2. 🌐 Web Cache Poisoning via Host Header
+
+Sometimes, a website reflects the Host header in its responses — like in HTML or script tags. 
+This isn’t usually exploitable on its own, because browsers won’t send custom Host headers.
+
+But if the site uses a web cache, you might turn this into a stored attack.
+
+
+How it works:
+
+1. You send a request with a malicious Host header that gets reflected in the response.
+2. If the server caches that response, others might get served the poisoned version.
+3. This only works if the cache doesn't include the Host header in its cache key.
+
+✅ Best chance: When the app uses application-level caching, not standalone caches.
+
+
+
+Here’s a simple comparison:
+
+|                        | Application-Level Caching                                  | Standalone Caching                           |
+| ---------------------- | -------------------------------------------------------------- | ------------------------------------------------ |
+| Location           | Built into the web app or framework                            | Separate caching layer/tool (e.g., Varnish, CDN) |
+| Control            | Developers have more control over what’s cached and how        | Less flexible — configured outside the app       |
+| Example Tools      | Django cache, Rails cache, Flask-Caching                       | Varnish, Nginx cache, Cloudflare, Akamai         |
+| Cache Key Behavior | May ignore headers like `Host` unless customized           | Often includes `Host` in cache key by default    |
+| Security Risk      | Higher risk for web cache poisoning if `Host` is reflected | Lower risk due to strict cache key rules         |
+
+
+Summary:
+
+* Application-level cache = inside the app, more flexible, more prone to misuse.
+* Standalone cache = external layer, stricter rules, often safer.
+
+
+-
+
+
+3. Exploiting classic server-side vulnerabilities
+
+Every HTTP header is a potential vector for exploiting classic server-side vulnerabilities, and the Host header is no exception. 
+For example, you should try the usual SQL injection probing techniques via the Host header. If the value of the header is passed into a SQL statement, this could be exploitable. 
+
+
+-
+
+
+4. Accessing restricted functionality / Bypassing authentication
+
+For fairly obvious reasons, it is common for websites to restrict access to certain functionality to internal users only. 
+However, some websites' access control features make flawed assumptions that allow you to bypass these restrictions by making simple modifications to the Host header. 
+This can expose an increased attack surface for other exploits. 
+
+
+-
+
+
+5. Accessing Internal Sites via Virtual Host Brute-Forcing
+
+Sometimes, companies host both public and internal websites on the same server. 
+Internal sites may use private IPs and not show up in DNS records (e.g., intranet.example.com → 10.0.0.132).
+
+If an attacker guesses the internal hostname by, such as information disclosure, they can access it by setting the Host header manually. 
+Tools like Burp Intruder can brute-force subdomains to discover hidden internal sites using a simple wordlist of candidate subdomains.
+
+
+-
+
+
+6. Routing-based SSRF
+
+Routing-based SSRF (or Host header SSRF) abuses misconfigured load balancers or reverse proxies that route traffic based on the `Host` header.
+
+If these systems trust the `Host` header without validation, an attacker can modify it to send requests to internal services—turning a simple header into a way to access private networks.
+
+Steps:
+
+* Send a request with a custom `Host` (e.g. your Burp Collaborator domain).
+* If the system makes a DNS or HTTP request to it, it's vulnerable.
+* Then try targeting internal IPs (found via leaks or brute-forcing standard private IP ranges, such as 192.168.0.0/16).
+
+These components are powerful targets since they bridge public and internal networks.
+
+
+-
+
+
+7. Connection State Attacks
+
+Some servers reuse connections for performance and wrongly assume that headers like `Host` stay the same for all requests on that connection.
+
+This assumption can be dangerous. For example:
+
+* The server might only validate the first request, so attackers can send a harmless request first, then a malicious one on the same connection to bypass checks.
+* Reverse proxies may route all requests based on the first `Host` header, allowing attacks like SSRF, cache poisoning, or password reset poisoning.
+
+Tools like Burp Repeater can send different `Host` headers in the same connection, exposing these flaws.
+
+
+-
+
+
