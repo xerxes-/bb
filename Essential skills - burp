@@ -1,0 +1,401 @@
+Obfuscating attacks using encodings
+
+In this section, we'll show you how you can take advantage of the standard decoding performed by websites to evade input filters and inject harmful payloads for a variety of attacks, such as XSS and SQL injection. 
+
+
+1. Context-specific decoding
+
+Both clients and servers use a variety of different encodings to pass data between systems. When they want to actually use the data, this often means they have to decode it first. 
+The exact sequence of decoding steps that are performed depends on the context in which the data appears. 
+For example, a query parameter is typically URL decoded server-side, while the text content of an HTML element may be HTML decoded client-side.
+
+When constructing an attack, you should think about where exactly your payload is being injected. 
+If you can infer how your input is being decoded based on this context, you can potentially identify alternative ways to represent the same payload. 
+
+
+
+🔍 Scenario: XSS via Double-Encoding in Query Parameter
+
+🧪 Target: A web application reflects the value of a query parameter into a webpage.
+
+
+Example URL: https://vulnerable-website.com/search?q=<script>alert(1)</script>
+
+
+❌ Normal behavior:
+
+This gets filtered or encoded, so <script> is not executed—no XSS.
+
+
+
+💡 Context-Specific Decoding Trick: Double URL Encoding
+
+You try:
+
+https://vulnerable-website.com/search?q=%253Cscript%253Ealert(1)%253C%252Fscript%253E
+
+    %25 is the encoding of %, so %253C is decoded to %3C
+
+    Then %3C is decoded to <
+
+
+🔄 Server decoding process:
+
+    First decode %253C → %3C
+
+    Then decode %3C → <
+
+
+✅ Result:
+
+Final output = <script>alert(1)</script> — and if the server reflects this without further sanitization, XSS triggers.
+
+
+
+🛠️ Summary:
+
+    Injection point: URL query string
+
+    Decoding context: Server-side URL decoding → HTML output (client-side)
+
+    Bypass method: Double-encoding to evade initial filters
+
+
+
+
+
+
+2. Obfuscation via URL encoding
+
+In URLs, a series of reserved characters carry special meaning. For example, an ampersand (&) is used as a delimiter to separate parameters in the query string. 
+The problem is, URL-based inputs may contain these characters for a different reason. Consider a parameter containing a user's search query. What happens if the user searches for something like "Fish & Chips"?
+
+Browsers automatically URL encode any characters that may cause ambiguity for parsers. This usually means substituting them with a % character and their 2-digit hex code as follows:
+
+[...]/?search=Fish+%26+Chips
+
+This ensures that the ampersand will not be mistaken for a delimiter.
+
+
+Note: Although the space character can be encoded as %20, it is often represented by a plus (+) instead, as in the example above.
+
+
+Any URL-based input is automatically URL decoded server-side before it is assigned to the relevant variables. 
+This means that, as far as most servers are concerned, sequences like %22, %3C, and %3E in a query parameter are synonymous with ", <, and > characters respectively. 
+In other words, you can inject URL-encoded data via the URL and it will usually still be interpreted correctly by the back-end application.
+
+Occasionally, you may find that WAFs and suchlike fail to properly URL decode your input when checking it. 
+In this case, you may be able to smuggle payloads to the back-end application simply by encoding any characters or words that are blacklisted. 
+For example, in a SQL injection attack, you might encode the keywords, so SELECT becomes %53%45%4C%45%43%54 and so on. 
+
+
+
+
+
+
+3. Obfuscation via double URL encoding
+
+For one reason or another, some servers perform two rounds of URL decoding on any URLs they receive. 
+This isn't necessarily an issue in its own right, provided that any security mechanisms also double-decode the input when checking it. 
+Otherwise, this discrepancy enables an attacker to smuggle malicious input to the back-end by simply encoding it twice.
+
+Let's say you're trying to inject a standard XSS PoC, such as <img src=x onerror=alert(1)>, via a query parameter. In this case, the URL might look something like this:
+
+[...]/?search=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E
+
+
+When checking the request, if a WAF performs the standard URL decoding, it will easily identify this well-known payload. 
+The request is blocked from ever reaching the back-end. But what if you double-encode the injection? In practice, this means that the % characters themselves are then replaced with %25:
+
+[...]/?search=%253Cimg%2520src%253Dx%2520onerror%253Dalert(1)%253E
+
+
+As the WAF only decodes this once, it may not be able to identify that the request is dangerous. If the back-end server subsequently double-decodes this input, the payload will be successfully injected. 
+
+
+
+
+
+
+
+4. Obfuscation via HTML encoding
+
+Browsers decode HTML character references like:
+
+* `&colon;` → `:`
+* `&#58;` → `:`
+* `&#x3a;` → `:`
+
+These can be used to hide payloads from basic filters, especially in places like HTML attributes or text content.
+
+
+
+💣 XSS Example:
+
+<img src=x onerror="&#x61;lert(1)">
+
+
+Here, `&#x61;` = `a`, so this becomes `alert(1)` at runtime.
+
+
+
+🧙‍♂️ WAF Bypass Trick:
+
+If your payload still gets blocked after HTML encoding it, you may find that you can evade the filter just by prefixing the code points with a few zeros:
+
+<a href="javascript&#00000058;alert(1)">Click me</a>
+
+
+
+This helps sneak past weak filters that don’t decode input the same way the browser does.
+
+
+
+
+
+^
+✅ HTML Encoding (Entities like `&#x3C;`)
+
+* Decoded by: Browser (client-side)
+* When: During HTML parsing and rendering
+* Used in: HTML documents (inside tags, attributes, text content)
+* Example:
+
+  ```html
+  <img src=x onerror="&#x61;lert(1)">
+  ```
+
+  Browser sees: `<img src=x onerror="alert(1)">`
+
+---
+
+✅ XML Encoding (e.g., `&lt;`, `&gt;`)
+
+* Decoded by: Depends on the parser, often server-side
+* When: When the server processes the XML (e.g., SOAP, API)
+* Used in: XML files, API requests/responses
+* Example:
+
+  ```xml
+  <user>&lt;admin&gt;</user>
+  ```
+
+  Server parses this as: `<user><admin></admin></user>`
+
+---
+
+🧠 Key Difference:
+
+* HTML encoding is decoded by the browser, useful for client-side attacks like XSS.
+* XML encoding is decoded by the XML parser, usually server-side, relevant for attacks like XXE or injection into XML-based APIs.
+^
+
+
+
+
+
+
+5. Obfuscation via XML encoding
+
+
+<stockCheck>
+    <productId>
+        123
+    </productId>
+    <storeId>
+        999 &#x53;ELECT * FROM information_schema.tables
+    </storeId>
+</stockCheck>
+
+
+
+
+
+Lab: SQL injection with filter bypass via XML encoding
+
+
+ Identify the vulnerability
+
+    Observe that the stock check feature sends the productId and storeId to the application in XML format.
+
+    Send the POST /product/stock request to Burp Repeater.
+
+    In Burp Repeater, probe the storeId to see whether your input is evaluated. For example, try replacing the ID with mathematical expressions that evaluate to other potential IDs, for example:
+    <storeId>1+1</storeId>
+
+    Observe that your input appears to be evaluated by the application, returning the stock for different stores.
+
+    Try determining the number of columns returned by the original query by appending a UNION SELECT statement to the original store ID:
+    <storeId>1 UNION SELECT NULL</storeId>
+
+    Observe that your request has been blocked due to being flagged as a potential attack.
+
+
+
+ Bypass the WAF
+
+    As you're injecting into XML, try obfuscating your payload using XML entities. One way to do this is using the Hackvertor extension. Just highlight your input, right-click, then select Extensions > Hackvertor > Encode > dec_entities/hex_entities.
+
+    Resend the request and notice that you now receive a normal response from the application. This suggests that you have successfully bypassed the WAF.
+
+
+
+Craft an exploit
+
+    Pick up where you left off, and deduce that the query returns a single column. When you try to return more than one column, the application returns 0 units, implying an error.
+
+    As you can only return one column, you need to concatenate the returned usernames and passwords, for example:
+    <storeId><@hex_entities>1 UNION SELECT username || '~' || password FROM users</@hex_entities></storeId>
+
+    Send this query and observe that you've successfully fetched the usernames and passwords from the database, separated by a ~ character.
+
+    Use the administrator's credentials to log in and solve the lab.
+
+
+
+
+
+
+
+
+6. Obfuscation via unicode escaping
+
+Unicode escape sequences consist of the prefix \u followed by the four-digit hex code for the character. For example, \u003a represents a colon. ES6 also supports a new form of unicode escape using curly braces: \u{3a}. 
+
+For example, let's say you're trying to exploit DOM XSS where your input is passed to the eval() sink as a string. If your initial attempts are blocked, try escaping one of the characters as follows:
+
+eval("\u0061lert(1)")
+
+As this will remain encoded server-side, it may go undetected until the browser decodes it again. 
+
+
+
+Note: Inside a string, you can escape any characters like this. However, outside of a string, escaping some characters will result in a syntax error. This includes opening and closing parentheses, for example.
+
+It's also worth noting that the ES6-style unicode escapes also allow optional leading zeros, so some WAFs may be easily fooled using the same technique we used for HTML encodings. For example:
+
+<a href="javascript:\u{00000000061}alert(1)">Click me</a>
+
+
+
+
+
+
+
+
+7. Obfuscation via hex escaping
+
+Another option when injecting into a string context is to use hex escapes, which represent characters using their hexadecimal code point, prefixed with \x. For example, the lowercase letter a is represented by \x61.
+
+Just like unicode escapes, these will be decoded client-side as long as the input is evaluated as a string:
+
+eval("\x61lert")
+
+Note that you can sometimes also obfuscate SQL statements in a similar manner using the prefix 0x. For example, 0x53454c454354 may be decoded to form the SELECT keyword. 
+
+
+
+
+
+
+
+8. Obfuscation via octal escaping
+
+Octal escaping works in pretty much the same way as hex escaping, except that the character references use a base-8 numbering system rather than base-16. 
+These are prefixed with a standalone backslash, meaning that the lowercase letter a is represented by \141.
+
+eval("\141lert(1)")
+
+
+
+
+
+
+
+
+9. Obfuscation via multiple encodings
+
+It is important to note that you can combine encodings to hide your payloads behind multiple layers of obfuscation. Look at the javascript: URL in the following example:
+
+<a href="javascript:&bsol;u0061lert(1)">Click me</a>
+
+Browsers will first HTML decode &bsol;, resulting in a backslash. This has the effect of turning the otherwise arbitrary u0061 characters into the unicode escape \u0061:
+
+<a href="javascript:\u0061lert(1)">Click me</a>
+
+This is then decoded further to form a functioning XSS payload:
+
+<a href="javascript:alert(1)">Click me</a>
+
+Clearly, to successfully inject a payload in this way, you need a solid understanding of which decoding is performed on your input and in what order. 
+
+
+
+
+
+
+
+
+
+10. Obfuscation via the SQL CHAR() function
+
+Although not strictly a form of encoding, in some cases, you may be able to obfuscate your SQL injection attacks using the CHAR()function. 
+This accepts a single decimal or hex code point and returns the matching character. Hex codes must be prefixed with 0x. For example, both CHAR(83) and CHAR(0x53) return the capital letter S.
+
+By concatenating the returned values, you can use this approach to obfuscate blocked keywords. For example, even if SELECT is blacklisted, the following injection initially appears harmless:
+
+CHAR(83)+CHAR(69)+CHAR(76)+CHAR(69)+CHAR(67)+CHAR(84)
+
+However, when this is processed as SQL by the application, it will dynamically construct the SELECT keyword and execute the injected query. 
+
+
+
+--
+
+
+
+Using Burp Scanner during manual testing
+
+
+Scanning a specific request
+
+When you find an interesting request, don’t just use Repeater or Intruder — right-click and select "Do active scan" in Burp.
+
+This quickly checks for common issues in that request, saving you time. It won’t find everything, but it can spot or rule out vulns fast, letting you focus on deeper manual testing.
+
+Even if you scan whole sites, this targeted scanning reduces overall time and effort.
+
+
+
+
+Scanning custom insertion points
+
+Instead of scanning a whole request, you can scan just one input by highlighting it in the message editor and right-clicking "Scan selected insertion point".
+
+For even faster testing, use the Scan manual insertion point extension to target any part of the request — like custom headers or parameter values.
+
+This focused approach is quick and helps uncover issues Burp might otherwise miss.
+
+
+
+
+Scanning non-standard data structures
+
+You can scan specific substrings within a value — useful for non-standard formats.
+
+Example:
+
+user=048857-carlos
+
+
+Burp treats this as one value, but you might want to test just `carlos`.
+
+Simply highlight `carlos` in the message editor, right-click, and choose "Scan selected insertion point".
+With Intruder, you can define multiple points (e.g., `048857` and `carlos`) and scan both.
+
+This helps test more precisely without breaking the structure.
+
+
+--
+
+
